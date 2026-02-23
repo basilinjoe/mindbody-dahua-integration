@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(printf:*)",
+      "WebFetch(domain:files.dahua.support)",
+      "WebFetch(domain:github.com)",
+      "Bash(python -m py_compile:*)",
+      "Bash(uv pip install:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Sync Logs{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Sync Logs</h1>
+      <p class="text-sm text-gray-500 mt-1">Audit trail of all sync operations</p>
+    </div>
+    <button hx-post="/admin/sync/trigger" hx-swap="none"
+      class="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      Trigger Full Sync
+      <span class="htmx-indicator">
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+      </span>
+    </button>
+  </div>
+
+  <!-- Filters -->
+  <div class="bg-white rounded-xl border border-gray-200 p-4">
+    <form method="GET" action="/admin/sync" class="flex flex-wrap items-center gap-4">
+      <select name="sync_type" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+        <option value="" {% if not sync_type %}selected{% endif %}>All Types</option>
+        <option value="full_poll" {% if sync_type == 'full_poll' %}selected{% endif %}>Full Poll</option>
+        <option value="webhook" {% if sync_type == 'webhook' %}selected{% endif %}>Webhook</option>
+        <option value="manual" {% if sync_type == 'manual' %}selected{% endif %}>Manual</option>
+      </select>
+      <select name="action" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+        <option value="" {% if not action_filter %}selected{% endif %}>All Actions</option>
+        <option value="enroll" {% if action_filter == 'enroll' %}selected{% endif %}>Enroll</option>
+        <option value="deactivate" {% if action_filter == 'deactivate' %}selected{% endif %}>Deactivate</option>
+        <option value="reactivate" {% if action_filter == 'reactivate' %}selected{% endif %}>Reactivate</option>
+        <option value="photo_upload" {% if action_filter == 'photo_upload' %}selected{% endif %}>Photo Upload</option>
+      </select>
+      <select name="status" class="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+        <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+        <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+        <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+      </select>
+      <button type="submit" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
+        Filter
+      </button>
+    </form>
+  </div>
+
+  <!-- Logs Table -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b border-gray-200">
+        <tr>
+          <th class="text-left px-6 py-3 font-medium text-gray-500">Time</th>
+          <th class="text-left px-6 py-3 font-medium text-gray-500">Type</th>
+          <th class="text-left px-6 py-3 font-medium text-gray-500">Action</th>
+          <th class="text-left px-6 py-3 font-medium text-gray-500">Member</th>
+          <th class="text-left px-6 py-3 font-medium text-gray-500">Status</th>
+          <th class="text-left px-6 py-3 font-medium text-gray-500">Error</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for log in logs %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-6 py-3 text-xs text-gray-500">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+          <td class="px-6 py-3">
+            <span class="px-2 py-0.5 rounded-md text-xs font-medium
+              {% if log.sync_type == 'full_poll' %}bg-blue-50 text-blue-700
+              {% elif log.sync_type == 'webhook' %}bg-purple-50 text-purple-700
+              {% else %}bg-gray-100 text-gray-600{% endif %}">
+              {{ log.sync_type }}
+            </span>
+          </td>
+          <td class="px-6 py-3">
+            <span class="px-2 py-0.5 rounded-md text-xs font-medium
+              {% if log.action == 'enroll' %}bg-blue-50 text-blue-700
+              {% elif log.action == 'deactivate' %}bg-red-50 text-red-700
+              {% elif log.action == 'reactivate' %}bg-green-50 text-green-700
+              {% elif log.action == 'photo_upload' %}bg-purple-50 text-purple-700
+              {% else %}bg-gray-50 text-gray-700{% endif %}">
+              {{ log.action }}
+            </span>
+          </td>
+          <td class="px-6 py-3 text-gray-700">{{ log.member_name or log.mindbody_client_id or '-' }}</td>
+          <td class="px-6 py-3">
+            {% if log.success %}
+            <span class="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+              <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Success
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
+              <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Failed
+            </span>
+            {% endif %}
+          </td>
+          <td class="px-6 py-3 text-xs text-gray-500 max-w-xs truncate">{{ log.error_message or '-' }}</td>
+        </tr>
+        {% endfor %}
+        {% if not logs %}
+        <tr>
+          <td colspan="6" class="px-6 py-12 text-center text-gray-400">No logs found</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if total > page_size %}
+  <div class="flex items-center justify-between">
+    <p class="text-sm text-gray-500">Showing {{ offset + 1 }}–{{ [offset + page_size, total] | min }} of {{ total }}</p>
+    <div class="flex gap-2">
+      {% if offset > 0 %}
+      <a href="/admin/sync?offset={{ offset - page_size }}&sync_type={{ sync_type }}&action={{ action_filter }}&status={{ status_filter }}"
+        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Previous</a>
+      {% endif %}
+      {% if offset + page_size < total %}
+      <a href="/admin/sync?offset={{ offset + page_size }}&sync_type={{ sync_type }}&action={{ action_filter }}&status={{ status_filter }}"
+        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

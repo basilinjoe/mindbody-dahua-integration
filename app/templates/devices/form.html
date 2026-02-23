@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if device else 'Add' }} Device{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-6">
+  <!-- Breadcrumb -->
+  <nav class="flex items-center gap-2 text-sm text-gray-500">
+    <a href="/admin/devices" class="hover:text-gray-700">Devices</a>
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    <span class="text-gray-900">{{ 'Edit' if device else 'Add' }} Device</span>
+  </nav>
+
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">{{ 'Edit' if device else 'Add' }} Device</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      {% if device %}Update settings for {{ device.name }}{% else %}Connect a new Dahua ASI7214S gate{% endif %}
+    </p>
+  </div>
+
+  {% if error %}
+  <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST" action="/admin/devices/{{ device.id ~ '/edit' if device else 'add' }}"
+    class="bg-white rounded-xl border border-gray-200 p-6 space-y-6">
+
+    <div>
+      <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Device Name *</label>
+      <input type="text" id="name" name="name" required value="{{ device.name if device else '' }}"
+        placeholder="e.g., Main Entrance Gate"
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div class="col-span-2">
+        <label for="host" class="block text-sm font-medium text-gray-700 mb-1">IP Address / Hostname *</label>
+        <input type="text" id="host" name="host" required value="{{ device.host if device else '' }}"
+          placeholder="192.168.1.100"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      </div>
+      <div>
+        <label for="port" class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+        <input type="number" id="port" name="port" value="{{ device.port if device else 80 }}"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+        <input type="text" id="username" name="username" value="{{ device.username if device else 'admin' }}"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      </div>
+      <div>
+        <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+        <input type="password" id="password" name="password" {% if not device %}required{% endif %}
+          placeholder="{% if device %}Leave empty to keep current{% else %}Device password{% endif %}"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      </div>
+    </div>
+
+    <div>
+      <label for="door_ids" class="block text-sm font-medium text-gray-700 mb-1">Door IDs</label>
+      <input type="text" id="door_ids" name="door_ids" value="{{ device.door_ids if device else '0' }}"
+        placeholder="0,1"
+        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      <p class="text-xs text-gray-400 mt-1">Comma-separated door indices that members should have access to</p>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="is_enabled" name="is_enabled" value="1"
+        {% if not device or device.is_enabled %}checked{% endif %}
+        class="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900" />
+      <label for="is_enabled" class="text-sm font-medium text-gray-700">Enabled (include in sync operations)</label>
+    </div>
+
+    <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+      <a href="/admin/devices" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition">Cancel</a>
+      <button type="submit"
+        class="px-6 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition">
+        {{ 'Update Device' if device else 'Add Device' }}
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
