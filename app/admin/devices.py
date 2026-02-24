@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.clients.dahua import DahuaClient
 from app.models.device import DahuaDevice
+from app.models.member import SyncedMember
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/devices")
@@ -176,3 +177,50 @@ async def device_health_check(request: Request, device_id: int):
         db.close()
 
     return RedirectResponse(url="/admin/devices", status_code=303)
+
+
+@router.get("/{device_id}/users", response_class=HTMLResponse)
+async def device_users(request: Request, device_id: int):
+    """List all users stored on a specific Dahua device."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        # Build set of synced UserIDs for cross-reference
+        synced = db.query(SyncedMember.dahua_user_id).all()
+        synced_ids = {row[0] for row in synced}
+
+        users: list[dict] = []
+        error = None
+
+        client = DahuaClient(
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            users = await client.get_all_users()
+        except Exception as e:
+            error = f"Could not connect to device: {e}"
+            logger.exception("Failed to fetch users from device %d", device_id)
+        finally:
+            await client.close()
+
+        return request.app.state.templates.TemplateResponse(
+            "devices/users.html",
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": device,
+                "users": users,
+                "synced_ids": synced_ids,
+                "error": error,
+            },
+        )
+    finally:
+        db.close()
