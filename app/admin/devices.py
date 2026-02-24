@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import base64
 import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.clients.dahua import DahuaClient
 from app.models.device import DahuaDevice
@@ -410,3 +411,29 @@ async def device_user_delete(request: Request, device_id: int, user_id: str):
     finally:
         db.close()
     return RedirectResponse(url=f"/admin/devices/{device_id}/users", status_code=303)
+
+
+@router.post("/{device_id}/snapshot")
+async def device_snapshot(request: Request, device_id: int):
+    """Capture a snapshot from the device camera. Returns JSON with base64 image."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return JSONResponse({"error": "Device not found"}, status_code=404)
+
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            image_bytes = await client.capture_snapshot()
+            if not image_bytes:
+                return JSONResponse({"error": "Failed to capture snapshot from device"}, status_code=502)
+            b64 = base64.b64encode(image_bytes).decode("ascii")
+            return JSONResponse({"image": f"data:image/jpeg;base64,{b64}"})
+        finally:
+            await client.close()
+    finally:
+        db.close()

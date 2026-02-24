@@ -6,6 +6,7 @@ import uuid
 from fastapi import APIRouter, BackgroundTasks, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.models.device import DahuaDevice
 from app.models.member import SyncedMember
 from app.models.sync_log import SyncLog
 from app.utils.photo import process_photo_for_dahua
@@ -63,10 +64,15 @@ async def member_list(
 
 @router.get("/add", response_class=HTMLResponse)
 async def member_add_form(request: Request):
-    return request.app.state.templates.TemplateResponse(
-        "members/add.html",
-        {"request": request, "session_user": request.state.user, "active_page": "members", "error": None},
-    )
+    db = request.app.state.db_session_factory()
+    try:
+        devices = db.query(DahuaDevice).filter_by(is_enabled=True).order_by(DahuaDevice.name).all()
+        return request.app.state.templates.TemplateResponse(
+            "members/add.html",
+            {"request": request, "session_user": request.state.user, "active_page": "members", "error": None, "devices": devices},
+        )
+    finally:
+        db.close()
 
 
 @router.post("/add")
@@ -77,10 +83,12 @@ async def member_add_submit(
     email: str = Form(""),
     member_id: str = Form(...),
     photo: UploadFile | None = File(None),
+    captured_photo: str = Form(""),
 ):
     db = request.app.state.db_session_factory()
     templates = request.app.state.templates
-    ctx = {"request": request, "session_user": request.state.user, "active_page": "members"}
+    devices = db.query(DahuaDevice).filter_by(is_enabled=True).order_by(DahuaDevice.name).all()
+    ctx = {"request": request, "session_user": request.state.user, "active_page": "members", "devices": devices}
 
     try:
         # Check for duplicate
@@ -89,7 +97,13 @@ async def member_add_submit(
             return templates.TemplateResponse("members/add.html", {**ctx, "error": f"Member ID '{member_id}' already exists"})
 
         photo_b64 = None
-        if photo and photo.size and photo.size > 0:
+        if captured_photo:
+            # Photo captured from device camera (base64 data URI)
+            import base64 as b64mod
+            raw = captured_photo.split(",", 1)[-1] if "," in captured_photo else captured_photo
+            photo_bytes = b64mod.b64decode(raw)
+            photo_b64 = process_photo_for_dahua(photo_bytes, request.app.state.settings.photo_max_size_kb)
+        elif photo and photo.size and photo.size > 0:
             photo_bytes = await photo.read()
             photo_b64 = process_photo_for_dahua(photo_bytes, request.app.state.settings.photo_max_size_kb)
 

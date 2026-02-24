@@ -221,3 +221,24 @@ class DahuaClient:
             {"action": "closeDoor", "UserID": "101", "Type": "Remote", "channel": str(door_id)},
         )
         return resp.status_code == 200
+
+    # ---- Snapshot / Camera -------------------------------------------------
+
+    @dahua_retry
+    async def capture_snapshot(self, channel: int = 0) -> bytes | None:
+        """
+        Capture a JPEG snapshot from the device camera.
+        Returns raw JPEG bytes or None on failure.
+        """
+        async with self._semaphore:
+            resp = await self._http.get(
+                f"{self._base}/cgi-bin/snapshot.cgi",
+                params={"channel": str(channel)},
+            )
+            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image/"):
+                return resp.content
+            logger.error(
+                "capture_snapshot failed on %s (status %d, content-type %s)",
+                self.device_name, resp.status_code, resp.headers.get("content-type", "?"),
+            )
+            return None
