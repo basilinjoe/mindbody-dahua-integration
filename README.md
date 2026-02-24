@@ -25,7 +25,20 @@ cp .env.example .env
 docker-compose up --build
 ```
 
-### 3. Run locally
+### 3. Run locally (PowerShell)
+
+```powershell
+.\deploy-local.ps1              # setup + start on port 8000
+.\deploy-local.ps1 -Port 9000 -Reload   # custom port + auto-reload
+```
+
+If you get an execution policy error, run this first:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy-local.ps1
+```
+
+Or manually:
 
 ```bash
 uv venv && source .venv/Scripts/activate  # or .venv/bin/activate on Linux/Mac
