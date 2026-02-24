@@ -283,3 +283,130 @@ async def device_users(request: Request, device_id: int):
         )
     finally:
         db.close()
+
+
+@router.get("/{device_id}/users/{user_id}", response_class=HTMLResponse)
+async def device_user_detail(request: Request, device_id: int, user_id: str):
+    """Show details of a single user on a device."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        # Check if this user is synced from our system
+        synced_member = db.query(SyncedMember).filter_by(dahua_user_id=user_id).first()
+
+        user = None
+        error = None
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            user = await client.get_user(user_id)
+        except Exception as e:
+            error = f"Could not connect to device: {e}"
+            logger.exception("Failed to fetch user %s from device %d", user_id, device_id)
+        finally:
+            await client.close()
+
+        if not user and not error:
+            error = f"User '{user_id}' not found on this device"
+
+        return request.app.state.templates.TemplateResponse(
+            "devices/user_detail.html",
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": device,
+                "user": user,
+                "synced_member": synced_member,
+                "error": error,
+            },
+        )
+    finally:
+        db.close()
+
+
+@router.post("/{device_id}/users/{user_id}/activate")
+async def device_user_activate(request: Request, device_id: int, user_id: str):
+    """Set a user's card status to Normal (0) on this device."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            ok = await client.update_user_status(user_id, 0)
+            if ok:
+                logger.info("Activated user %s on %s", user_id, device.name)
+            else:
+                logger.warning("Failed to activate user %s on %s", user_id, device.name)
+        finally:
+            await client.close()
+    finally:
+        db.close()
+    return RedirectResponse(url=f"/admin/devices/{device_id}/users/{user_id}", status_code=303)
+
+
+@router.post("/{device_id}/users/{user_id}/freeze")
+async def device_user_freeze(request: Request, device_id: int, user_id: str):
+    """Set a user's card status to Frozen (4) on this device."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            ok = await client.update_user_status(user_id, 4)
+            if ok:
+                logger.info("Froze user %s on %s", user_id, device.name)
+            else:
+                logger.warning("Failed to freeze user %s on %s", user_id, device.name)
+        finally:
+            await client.close()
+    finally:
+        db.close()
+    return RedirectResponse(url=f"/admin/devices/{device_id}/users/{user_id}", status_code=303)
+
+
+@router.post("/{device_id}/users/{user_id}/delete")
+async def device_user_delete(request: Request, device_id: int, user_id: str):
+    """Remove a user completely from this device."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            ok = await client.remove_user(user_id)
+            if ok:
+                logger.info("Deleted user %s from %s", user_id, device.name)
+            else:
+                logger.warning("Failed to delete user %s from %s", user_id, device.name)
+        finally:
+            await client.close()
+    finally:
+        db.close()
+    return RedirectResponse(url=f"/admin/devices/{device_id}/users", status_code=303)
