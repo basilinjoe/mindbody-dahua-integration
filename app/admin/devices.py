@@ -179,6 +179,65 @@ async def device_health_check(request: Request, device_id: int):
     return RedirectResponse(url="/admin/devices", status_code=303)
 
 
+@router.post("/{device_id}/open-door")
+async def device_open_door(request: Request, device_id: int):
+    """Remotely open a gate/door."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        # Get door_id from query param, default to first configured door
+        door_id = int(request.query_params.get("door", device.door_ids.split(",")[0].strip()))
+
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            ok = await client.open_door(door_id)
+            if ok:
+                logger.info("Opened door %d on %s", door_id, device.name)
+            else:
+                logger.warning("Failed to open door %d on %s", door_id, device.name)
+        finally:
+            await client.close()
+    finally:
+        db.close()
+    return RedirectResponse(url="/admin/devices", status_code=303)
+
+
+@router.post("/{device_id}/close-door")
+async def device_close_door(request: Request, device_id: int):
+    """Remotely close a gate/door."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device:
+            return RedirectResponse(url="/admin/devices", status_code=303)
+
+        door_id = int(request.query_params.get("door", device.door_ids.split(",")[0].strip()))
+
+        client = DahuaClient(
+            host=device.host, port=device.port,
+            username=device.username, password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            ok = await client.close_door(door_id)
+            if ok:
+                logger.info("Closed door %d on %s", door_id, device.name)
+            else:
+                logger.warning("Failed to close door %d on %s", door_id, device.name)
+        finally:
+            await client.close()
+    finally:
+        db.close()
+    return RedirectResponse(url="/admin/devices", status_code=303)
+
+
 @router.get("/{device_id}/users", response_class=HTMLResponse)
 async def device_users(request: Request, device_id: int):
     """List all users stored on a specific Dahua device."""

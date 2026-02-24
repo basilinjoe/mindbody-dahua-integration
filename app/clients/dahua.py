@@ -212,3 +212,12 @@ class DahuaClient:
             {"action": "openDoor", "UserID": "101", "Type": "Remote", "channel": str(door_id)},
         )
         return resp.status_code == 200
+
+    @dahua_retry
+    async def close_door(self, door_id: int = 0) -> bool:
+        """Remotely close a door (for testing / admin)."""
+        resp = await self._get(
+            "/cgi-bin/accessControl.cgi",
+            {"action": "closeDoor", "UserID": "101", "Type": "Remote", "channel": str(door_id)},
+        )
+        return resp.status_code == 200
