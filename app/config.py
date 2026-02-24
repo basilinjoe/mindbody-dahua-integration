@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     dahua_default_password: str = ""
     dahua_default_door_ids: str = "0"
 
+    # -- Dahua multi-device seeding (JSON array, optional) --
+    # Example: [{"name":"Main Gate","host":"192.168.1.100","password":"pass"},...]
+    dahua_devices: str = ""
+
     # -- Application --
     database_url: str = "sqlite:///./data/sync.db"
     sync_interval_minutes: int = 30

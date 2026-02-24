@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -39,8 +40,8 @@ async def lifespan(app: FastAPI):
     # Seed admin user on first boot
     _seed_admin(db_session_factory, settings)
 
-    # Seed default Dahua device if configured
-    _seed_default_device(db_session_factory, settings)
+    # Seed Dahua devices from env config
+    _seed_devices(db_session_factory, settings)
 
     # MindBody client
     mb_client = MindBodyClient(settings)
@@ -86,25 +87,55 @@ def _seed_admin(db_session_factory, settings: Settings) -> None:
         db.close()
 
 
-def _seed_default_device(db_session_factory, settings: Settings) -> None:
-    if not settings.dahua_default_host:
+def _seed_devices(db_session_factory, settings: Settings) -> None:
+    logger = logging.getLogger("app")
+    devices_to_seed: list[dict] = []
+
+    # 1) Parse DAHUA_DEVICES JSON array (preferred for multiple devices)
+    if settings.dahua_devices:
+        try:
+            parsed = json.loads(settings.dahua_devices)
+            if isinstance(parsed, list):
+                devices_to_seed.extend(parsed)
+            else:
+                logger.warning("DAHUA_DEVICES must be a JSON array, ignoring")
+        except json.JSONDecodeError as e:
+            logger.warning("Invalid JSON in DAHUA_DEVICES: %s", e)
+
+    # 2) Fall back to single DAHUA_DEFAULT_* vars (backward-compatible)
+    if not devices_to_seed and settings.dahua_default_host:
+        devices_to_seed.append({
+            "name": "Default Device",
+            "host": settings.dahua_default_host,
+            "port": settings.dahua_default_port,
+            "username": settings.dahua_default_username,
+            "password": settings.dahua_default_password,
+            "door_ids": settings.dahua_default_door_ids,
+        })
+
+    if not devices_to_seed:
         return
+
     db = db_session_factory()
     try:
-        exists = db.query(DahuaDevice).filter_by(host=settings.dahua_default_host).first()
-        if not exists:
-            device = DahuaDevice(
-                name="Default Device",
-                host=settings.dahua_default_host,
-                port=settings.dahua_default_port,
-                username=settings.dahua_default_username,
-                password=settings.dahua_default_password,
-                door_ids=settings.dahua_default_door_ids,
-                is_enabled=True,
-            )
-            db.add(device)
-            db.commit()
-            logging.getLogger("app").info("Seeded default Dahua device: %s", settings.dahua_default_host)
+        for entry in devices_to_seed:
+            host = entry.get("host", "").strip()
+            if not host:
+                continue
+            exists = db.query(DahuaDevice).filter_by(host=host).first()
+            if not exists:
+                device = DahuaDevice(
+                    name=entry.get("name", host),
+                    host=host,
+                    port=int(entry.get("port", 80)),
+                    username=entry.get("username", "admin"),
+                    password=entry.get("password", ""),
+                    door_ids=entry.get("door_ids", "0"),
+                    is_enabled=bool(entry.get("is_enabled", True)),
+                )
+                db.add(device)
+                logger.info("Seeded Dahua device: %s (%s)", device.name, host)
+        db.commit()
     finally:
         db.close()
 
