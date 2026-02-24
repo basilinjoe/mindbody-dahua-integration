@@ -3,7 +3,7 @@ services:
     build: .
     container_name: mindbody-dahua-sync
     ports:
-      - "8000:8000"
+      - "8080:8000"
     env_file:
       - .env
     volumes:

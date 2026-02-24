@@ -20,7 +20,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 #>
 
 param(
-    [int]$Port = 8000,
+    [int]$Port = 8080,
     [switch]$Reload
 )
 
