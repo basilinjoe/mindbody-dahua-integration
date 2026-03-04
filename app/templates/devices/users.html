@@ -64,7 +64,29 @@
     <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-semibold text-gray-700">Users on Device</h2>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
+          <!-- Status filter -->
+          <div class="flex items-center gap-1">
+            <button onclick="setFilter('status','all')" data-filter-group="status" data-filter-value="all"
+              class="filter-btn active px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white transition">All</button>
+            <button onclick="setFilter('status','0')" data-filter-group="status" data-filter-value="0"
+              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Normal</button>
+            <button onclick="setFilter('status','4')" data-filter-group="status" data-filter-value="4"
+              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Frozen</button>
+            <button onclick="setFilter('status','other')" data-filter-group="status" data-filter-value="other"
+              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Other</button>
+          </div>
+          <div class="w-px h-5 bg-gray-200"></div>
+          <!-- Synced filter -->
+          <div class="flex items-center gap-1">
+            <button onclick="setFilter('synced','all')" data-filter-group="synced" data-filter-value="all"
+              class="filter-btn active px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white transition">All</button>
+            <button onclick="setFilter('synced','yes')" data-filter-group="synced" data-filter-value="yes"
+              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Synced</button>
+            <button onclick="setFilter('synced','no')" data-filter-group="synced" data-filter-value="no"
+              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Unsynced</button>
+          </div>
+          <div class="w-px h-5 bg-gray-200"></div>
           <input type="text" id="user-search" placeholder="Search by name or ID..."
             oninput="filterTable(this.value)"
             class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
@@ -86,7 +108,10 @@
       </thead>
       <tbody class="divide-y divide-gray-100">
         {% for user in users %}
-        <tr class="hover:bg-gray-50 transition user-row">
+        <tr class="hover:bg-gray-50 transition user-row"
+            data-status="{{ user.CardStatus | default('0') }}"
+            data-synced="{% if user.UserID in synced_ids %}yes{% else %}no{% endif %}"
+        >
           <td class="px-6 py-3 font-mono text-xs text-gray-700">{{ user.UserID }}</td>
           <td class="px-6 py-3 text-gray-900 font-medium">{{ user.CardName or '-' }}</td>
           <td class="px-6 py-3 font-mono text-xs text-gray-500">{{ user.CardNo or '-' }}</td>
@@ -175,14 +200,32 @@
   let filteredRows = allRows;
   let pageSize = 25;
   let currentPage = 1;
+  let activeFilters = { status: 'all', synced: 'all' };
+  let searchQuery = '';
 
-  function applyFilter(query) {
-    const q = query.toLowerCase();
-    filteredRows = q
-      ? allRows.filter(r => r.textContent.toLowerCase().includes(q))
-      : allRows;
+  function applyAllFilters() {
+    filteredRows = allRows.filter(r => {
+      // Text search
+      if (searchQuery && !r.textContent.toLowerCase().includes(searchQuery)) return false;
+      // Status filter
+      const st = activeFilters.status;
+      if (st !== 'all') {
+        const rowStatus = r.dataset.status;
+        if (st === 'other') { if (rowStatus === '0' || rowStatus === '4') return false; }
+        else { if (rowStatus !== st) return false; }
+      }
+      // Synced filter
+      const sy = activeFilters.synced;
+      if (sy !== 'all' && r.dataset.synced !== sy) return false;
+      return true;
+    });
     currentPage = 1;
     render();
+  }
+
+  function applyFilter(query) {
+    searchQuery = query.toLowerCase();
+    applyAllFilters();
   }
 
   function render() {
@@ -250,6 +293,20 @@
   // Expose to inline handlers
   window.filterTable = function(query) { applyFilter(query); };
   window.changePageSize = function(val) { pageSize = parseInt(val); currentPage = 1; render(); };
+  window.setFilter = function(group, value) {
+    activeFilters[group] = value;
+    // Update button styles
+    document.querySelectorAll('[data-filter-group="' + group + '"]').forEach(btn => {
+      if (btn.dataset.filterValue === value) {
+        btn.classList.add('bg-gray-900', 'text-white');
+        btn.classList.remove('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+      } else {
+        btn.classList.remove('bg-gray-900', 'text-white');
+        btn.classList.add('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+      }
+    });
+    applyAllFilters();
+  };
 
   render();
 })();

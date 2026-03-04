@@ -8,7 +8,12 @@
       "Bash(uv pip install:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(ls c:/Projects/mind-body-dahua/*.env)",
+      "mcp__plugin_serena_serena__read_file",
+      "mcp__plugin_serena_serena__list_dir",
+      "mcp__plugin_serena_serena__activate_project",
+      "mcp__plugin_serena_serena__search_for_pattern"
     ]
   }
 }

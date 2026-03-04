@@ -12,6 +12,7 @@ from app.clients.mindbody import MindBodyClient
 from app.config import Settings
 from app.models.device import DahuaDevice
 from app.models.member import SyncedMember
+from app.models.mindbody_client import MindBodyClient as MindBodyClientModel
 from app.models.sync_log import SyncLog
 from app.utils.photo import download_photo, process_photo_for_dahua
 
@@ -110,6 +111,12 @@ class SyncEngine:
                 return report
 
             report.total_clients = len(mb_clients)
+
+            # 1b. Persist raw MindBody client data for the MindBody Users page
+            try:
+                self._refresh_mindbody_clients(db, mb_clients)
+            except Exception as e:
+                logger.warning("Failed to refresh mindbody_clients table: %s", e)
 
             # 2. Check membership status for each client
             active_ids: set[str] = set()
@@ -409,6 +416,53 @@ class SyncEngine:
             logger.exception("Device health check failed")
         finally:
             db.close()
+
+    # ---- MindBody Client Cache ----------------------------------------------
+
+    def _refresh_mindbody_clients(self, db: Session, mb_clients: list[dict]) -> None:
+        """Upsert all MindBody client profiles into the local mindbody_clients table."""
+        now = datetime.now(timezone.utc)
+        for c in mb_clients:
+            mid = str(c.get("Id", "")).strip()
+            if not mid:
+                continue
+            existing = db.query(MindBodyClientModel).filter_by(mindbody_id=mid).first()
+            if existing:
+                existing.unique_id = c.get("UniqueId")
+                existing.first_name = c.get("FirstName", "")
+                existing.last_name = c.get("LastName", "")
+                existing.email = c.get("Email")
+                existing.mobile_phone = c.get("MobilePhone")
+                existing.home_phone = c.get("HomePhone")
+                existing.work_phone = c.get("WorkPhone")
+                existing.status = c.get("Status")
+                existing.active = bool(c.get("Active", False))
+                existing.birth_date = c.get("BirthDate")
+                existing.gender = c.get("Gender")
+                existing.created_at_mb = c.get("CreationDate")
+                existing.last_modified_at_mb = c.get("LastModifiedDateTime")
+                existing.photo_url = c.get("PhotoUrl")
+                existing.last_fetched_at = now
+            else:
+                db.add(MindBodyClientModel(
+                    mindbody_id=mid,
+                    unique_id=c.get("UniqueId"),
+                    first_name=c.get("FirstName", ""),
+                    last_name=c.get("LastName", ""),
+                    email=c.get("Email"),
+                    mobile_phone=c.get("MobilePhone"),
+                    home_phone=c.get("HomePhone"),
+                    work_phone=c.get("WorkPhone"),
+                    status=c.get("Status"),
+                    active=bool(c.get("Active", False)),
+                    birth_date=c.get("BirthDate"),
+                    gender=c.get("Gender"),
+                    created_at_mb=c.get("CreationDate"),
+                    last_modified_at_mb=c.get("LastModifiedDateTime"),
+                    photo_url=c.get("PhotoUrl"),
+                    last_fetched_at=now,
+                ))
+        logger.info("Upserted %d MindBody clients into mindbody_clients table", len(mb_clients))
 
     # ---- Logging ------------------------------------------------------------
 
