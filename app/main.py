@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
         health_interval_min=settings.device_health_interval_minutes,
     )
     scheduler.start()
+    app.state.scheduler = scheduler
 
     yield
 

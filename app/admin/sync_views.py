@@ -35,6 +35,7 @@ async def sync_logs(
         total = q.count()
         logs = q.order_by(SyncLog.created_at.desc()).offset(offset).limit(page_size).all()
 
+        scheduler = request.app.state.scheduler
         return request.app.state.templates.TemplateResponse(
             "sync/logs.html",
             {
@@ -48,6 +49,7 @@ async def sync_logs(
                 "sync_type": sync_type,
                 "action_filter": action,
                 "status_filter": status,
+                "sync_paused": scheduler.is_sync_paused,
             },
         )
     finally:
@@ -59,4 +61,18 @@ async def trigger_full_sync(request: Request, background_tasks: BackgroundTasks)
     engine = request.app.state.sync_engine
     background_tasks.add_task(engine.full_sync)
     logger.info("Manual full sync triggered by admin")
+    return RedirectResponse(url="/admin/sync", status_code=303)
+
+
+@router.post("/pause")
+async def pause_sync(request: Request):
+    request.app.state.scheduler.pause_sync()
+    logger.info("Sync paused by admin")
+    return RedirectResponse(url="/admin/sync", status_code=303)
+
+
+@router.post("/resume")
+async def resume_sync(request: Request):
+    request.app.state.scheduler.resume_sync()
+    logger.info("Sync resumed by admin")
     return RedirectResponse(url="/admin/sync", status_code=303)

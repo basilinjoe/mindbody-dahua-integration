@@ -44,6 +44,22 @@ class SyncScheduler:
         self._scheduler.shutdown(wait=False)
         logger.info("Scheduler stopped")
 
+    def pause_sync(self) -> None:
+        """Pause the scheduled full sync job (health checks continue)."""
+        self._scheduler.pause_job("full_sync")
+        logger.info("Full sync job paused")
+
+    def resume_sync(self) -> None:
+        """Resume the scheduled full sync job."""
+        self._scheduler.resume_job("full_sync")
+        logger.info("Full sync job resumed")
+
+    @property
+    def is_sync_paused(self) -> bool:
+        """Return True if the full sync job is currently paused."""
+        job = self._scheduler.get_job("full_sync")
+        return job is not None and job.next_run_time is None
+
     async def _run_full_sync(self) -> None:
         logger.info("Scheduled full sync starting")
         try:
