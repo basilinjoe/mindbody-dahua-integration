@@ -2,34 +2,32 @@
 {% block title %}MindBody Users{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-  <!-- Header -->
+{% set base_params %}sort={{ sort }}&order={{ order }}&search={{ search }}&filter_active={{ filter_active }}&filter_status={{ filter_status }}&filter_gender={{ filter_gender }}{% endset %}
+{% macro sort_url(col) %}/admin/mindbody-users?sort={{ col }}&order={{ 'desc' if sort == col and order == 'asc' else 'asc' }}&search={{ search }}&filter_active={{ filter_active }}&filter_status={{ filter_status }}&filter_gender={{ filter_gender }}&offset=0{% endmacro %}
+{% macro sort_icon(col) %}{% if sort == col %}<span class="text-gray-400">{{ '▲' if order == 'asc' else '▼' }}</span>{% endif %}{% endmacro %}
+
+<div class="flex flex-col gap-2 h-full">
+  <!-- Compact top bar -->
   <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-900">MindBody Users</h1>
-      <p class="text-sm text-gray-500 mt-1">
+    <div class="flex items-center gap-2">
+      <h1 class="text-sm font-semibold text-gray-900">MindBody Users</h1>
+      <span class="text-xs text-gray-400">
         {{ total }} client{{ 's' if total != 1 else '' }}
-        {% if last_fetched_at %}
-        &mdash; last refreshed {{ last_fetched_at.strftime('%b %d %Y %H:%M') }}
-        {% else %}
-        &mdash; not yet fetched
-        {% endif %}
-      </p>
+        {% if last_fetched_at %}&mdash; refreshed {{ last_fetched_at.strftime('%b %d %H:%M') }}{% endif %}
+      </span>
     </div>
     <div class="flex items-center gap-2">
       <form method="POST" action="/admin/mindbody-users/refresh">
         <button type="submit"
-          class="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition"
-          {% if not last_fetched_at %}title="No previous data — will do a full fetch"{% endif %}>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          class="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           {% if last_fetched_at %}Sync Changes{% else %}Refresh from MindBody{% endif %}
         </button>
       </form>
       {% if last_fetched_at %}
       <form method="POST" action="/admin/mindbody-users/refresh?full=true">
         <button type="submit"
-          class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition"
-          title="Re-fetch all clients and replace local data">
+          class="px-3 py-1 border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-50 transition">
           Full Refresh
         </button>
       </form>
@@ -37,146 +35,133 @@
     </div>
   </div>
 
-  <!-- Search & Filters -->
-  <div class="bg-white rounded-xl border border-gray-200 p-4">
-    <form method="GET" action="/admin/mindbody-users" class="space-y-3">
-      <input type="hidden" name="sort" value="{{ sort }}" />
-      <input type="hidden" name="order" value="{{ order }}" />
-      <!-- Search row -->
-      <div class="flex items-center gap-3">
-        <div class="flex-1">
-          <input type="text" name="search" value="{{ search }}" placeholder="Search by name or email..."
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+  <!-- Table card -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col min-h-0 flex-1">
+
+    <!-- Toolbar: row 1 — button + select filters -->
+    <div class="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-shrink-0">
+      <form method="GET" action="/admin/mindbody-users" id="filter-form" class="flex items-center gap-2 flex-wrap w-full">
+        <input type="hidden" name="sort" value="{{ sort }}" />
+        <input type="hidden" name="order" value="{{ order }}" />
+        <input type="hidden" name="offset" value="0" />
+        <!-- Active filter buttons -->
+        <div class="flex items-center gap-1">
+          <button type="submit" name="filter_active" value=""
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if not filter_active %}bg-gray-900 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">All</button>
+          <button type="submit" name="filter_active" value="active"
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if filter_active == 'active' %}bg-green-700 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">Active</button>
+          <button type="submit" name="filter_active" value="inactive"
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if filter_active == 'inactive' %}bg-gray-900 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">Inactive</button>
         </div>
-        <button type="submit" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
-          Search
-        </button>
-        {% if search or filter_active or filter_status or filter_gender %}
-        <a href="/admin/mindbody-users?sort={{ sort }}&order={{ order }}"
-          class="px-4 py-2 text-gray-500 text-sm hover:text-gray-700">Clear all</a>
-        {% endif %}
-      </div>
-      <!-- Filter row -->
-      <div class="flex items-center gap-3 flex-wrap">
-        <span class="text-xs text-gray-500 font-medium">Filter:</span>
-        <!-- Active -->
-        <select name="filter_active"
-          class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
-          <option value="">All activity</option>
-          <option value="active" {% if filter_active == 'active' %}selected{% endif %}>Active</option>
-          <option value="inactive" {% if filter_active == 'inactive' %}selected{% endif %}>Inactive</option>
-        </select>
-        <!-- Status -->
-        <select name="filter_status"
-          class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
+        <div class="w-px h-4 bg-gray-200"></div>
+        <!-- Status select -->
+        <select name="filter_status" onchange="this.form.submit()"
+          class="px-2.5 py-0.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-gray-900 outline-none">
           <option value="">All statuses</option>
           {% for s in statuses %}
           <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
           {% endfor %}
         </select>
-        <!-- Gender -->
-        <select name="filter_gender"
-          class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
+        <!-- Gender select -->
+        <select name="filter_gender" onchange="this.form.submit()"
+          class="px-2.5 py-0.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-gray-900 outline-none">
           <option value="">All genders</option>
           {% for g in genders %}
           <option value="{{ g }}" {% if filter_gender == g %}selected{% endif %}>{{ g }}</option>
           {% endfor %}
         </select>
-        <button type="submit" class="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
-          Apply
-        </button>
-      </div>
-    </form>
-  </div>
+        {% if search or filter_active or filter_status or filter_gender %}
+        <a href="/admin/mindbody-users?sort={{ sort }}&order={{ order }}"
+          class="px-2.5 py-0.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-100 transition">Clear</a>
+        {% endif %}
+        <!-- Search input (right-aligned) -->
+        <div class="flex items-center gap-1 ml-auto">
+          <input type="text" name="search" value="{{ search }}" placeholder="Search name or email…"
+            class="px-2.5 py-1 border border-gray-300 rounded-lg text-xs w-52 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+          <button type="submit" class="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition">Search</button>
+        </div>
+      </form>
+    </div>
 
-  <!-- Table -->
-  {% set base_params %}sort={{ sort }}&order={{ order }}&search={{ search }}&filter_active={{ filter_active }}&filter_status={{ filter_status }}&filter_gender={{ filter_gender }}{% endset %}
-  {% macro sort_url(col) %}
-    /admin/mindbody-users?sort={{ col }}&order={{ 'desc' if sort == col and order == 'asc' else 'asc' }}&search={{ search }}&filter_active={{ filter_active }}&filter_status={{ filter_status }}&filter_gender={{ filter_gender }}&offset=0
-  {% endmacro %}
-  {% macro sort_icon(col) %}
-    {% if sort == col %}{{ '▲' if order == 'asc' else '▼' }}{% endif %}
-  {% endmacro %}
-
-  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm whitespace-nowrap">
-        <thead class="bg-gray-50 border-b border-gray-200">
+    <!-- Scrollable table -->
+    <div class="overflow-auto flex-1">
+      <table class="w-full text-xs whitespace-nowrap">
+        <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
           <tr>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('mindbody_id') }}" class="hover:text-gray-900">ID {{ sort_icon('mindbody_id') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('last_name') }}" class="hover:text-gray-900">Name {{ sort_icon('last_name') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('email') }}" class="hover:text-gray-900">Email {{ sort_icon('email') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('mobile_phone') }}" class="hover:text-gray-900">Mobile {{ sort_icon('mobile_phone') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">Home Phone</th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">Work Phone</th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Home Phone</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Work Phone</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('status') }}" class="hover:text-gray-900">Status {{ sort_icon('status') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('active') }}" class="hover:text-gray-900">Active {{ sort_icon('active') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('birth_date') }}" class="hover:text-gray-900">Birth Date {{ sort_icon('birth_date') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('gender') }}" class="hover:text-gray-900">Gender {{ sort_icon('gender') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('created_at_mb') }}" class="hover:text-gray-900">Created {{ sort_icon('created_at_mb') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">
-              <a href="{{ sort_url('last_modified_at_mb') }}" class="hover:text-gray-900">Last Modified {{ sort_icon('last_modified_at_mb') }}</a>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">
+              <a href="{{ sort_url('last_modified_at_mb') }}" class="hover:text-gray-900">Modified {{ sort_icon('last_modified_at_mb') }}</a>
             </th>
-            <th class="text-left px-4 py-3 font-medium text-gray-500">Photo URL</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Photo</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           {% for client in clients %}
           <tr class="hover:bg-gray-50 transition">
-            <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ client.mindbody_id }}</td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0
+            <td class="px-3 py-1.5 text-gray-500 font-mono">{{ client.mindbody_id }}</td>
+            <td class="px-3 py-1.5">
+              <div class="flex items-center gap-1.5">
+                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0
                   {% if client.active %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">
                   {{ (client.first_name[:1] if client.first_name else '') }}{{ (client.last_name[:1] if client.last_name else '') }}
                 </div>
                 <span class="font-medium text-gray-900">{{ client.full_name or '—' }}</span>
               </div>
             </td>
-            <td class="px-4 py-3 text-gray-500">{{ client.email or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ client.mobile_phone or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ client.home_phone or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ client.work_phone or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ client.status or '—' }}</td>
-            <td class="px-4 py-3">
+            <td class="px-3 py-1.5 text-gray-500">{{ client.email or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.mobile_phone or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.home_phone or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.work_phone or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.status or '—' }}</td>
+            <td class="px-3 py-1.5">
               {% if client.active %}
-              <span class="inline-flex items-center gap-1.5 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active</span>
+              <span class="inline-flex items-center gap-1 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active</span>
               {% else %}
-              <span class="inline-flex items-center gap-1.5 text-gray-400"><span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>Inactive</span>
+              <span class="inline-flex items-center gap-1 text-gray-400"><span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>Inactive</span>
               {% endif %}
             </td>
-            <td class="px-4 py-3 text-gray-500">{{ client.birth_date or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500">{{ client.gender or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500 text-xs">{{ client.created_at_mb or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500 text-xs">{{ client.last_modified_at_mb or '—' }}</td>
-            <td class="px-4 py-3 text-gray-500 text-xs max-w-[160px] truncate">
+            <td class="px-3 py-1.5 text-gray-500">{{ client.birth_date or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.gender or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.created_at_mb or '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ client.last_modified_at_mb or '—' }}</td>
+            <td class="px-3 py-1.5">
               {% if client.photo_url %}
-              <a href="{{ client.photo_url }}" target="_blank" class="text-blue-500 hover:underline" title="{{ client.photo_url }}">View</a>
-              {% else %}—{% endif %}
+              <a href="{{ client.photo_url }}" target="_blank" class="text-blue-500 hover:underline">View</a>
+              {% else %}<span class="text-gray-300">—</span>{% endif %}
             </td>
           </tr>
           {% endfor %}
           {% if not clients %}
           <tr>
-            <td colspan="13" class="px-4 py-12 text-center text-gray-400">
+            <td colspan="13" class="px-3 py-10 text-center text-gray-400">
               {% if search or filter_active or filter_status or filter_gender %}
                 No clients match the current filters
               {% else %}
@@ -188,25 +173,44 @@
         </tbody>
       </table>
     </div>
-  </div>
 
-  <!-- Pagination -->
-  {% if total > page_size %}
-  <div class="flex items-center justify-between">
-    <p class="text-sm text-gray-500">
-      Showing {{ offset + 1 }}–{{ [offset + page_size, total] | min }} of {{ total }}
-    </p>
-    <div class="flex gap-2">
-      {% if offset > 0 %}
-      <a href="/admin/mindbody-users?offset={{ offset - page_size }}&{{ base_params }}"
-        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Previous</a>
-      {% endif %}
-      {% if offset + page_size < total %}
-      <a href="/admin/mindbody-users?offset={{ offset + page_size }}&{{ base_params }}"
-        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Next</a>
-      {% endif %}
+    <!-- Pagination -->
+    {% if total > page_size %}
+    <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+      <p class="text-xs text-gray-500">
+        Showing {{ offset + 1 }}–{{ [offset + page_size, total] | min }} of {{ total }}
+      </p>
+      <div class="flex gap-1">
+        {% if offset > 0 %}
+        <a href="/admin/mindbody-users?offset={{ offset - page_size }}&{{ base_params }}"
+          class="px-2.5 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50">Previous</a>
+        {% endif %}
+        {% if offset + page_size < total %}
+        <a href="/admin/mindbody-users?offset={{ offset + page_size }}&{{ base_params }}"
+          class="px-2.5 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50">Next</a>
+        {% endif %}
+      </div>
     </div>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
+
+<script>
+(function() {
+  const main = document.querySelector('main');
+  if (main) {
+    main.style.overflow = 'hidden';
+    main.style.display = 'flex';
+    main.style.flexDirection = 'column';
+    const wrapper = main.firstElementChild;
+    if (wrapper) {
+      wrapper.style.flex = '1';
+      wrapper.style.minHeight = '0';
+      wrapper.style.padding = '1rem';
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+    }
+  }
+})();
+</script>
 {% endblock %}
