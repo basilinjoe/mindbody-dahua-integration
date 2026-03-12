@@ -25,28 +25,62 @@
     </form>
   </div>
 
-  <!-- Search -->
+  <!-- Search & Filters -->
   <div class="bg-white rounded-xl border border-gray-200 p-4">
-    <form method="GET" action="/admin/mindbody-users" class="flex items-center gap-4">
+    <form method="GET" action="/admin/mindbody-users" class="space-y-3">
       <input type="hidden" name="sort" value="{{ sort }}" />
       <input type="hidden" name="order" value="{{ order }}" />
-      <div class="flex-1">
-        <input type="text" name="search" value="{{ search }}" placeholder="Search by name or email..."
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      <!-- Search row -->
+      <div class="flex items-center gap-3">
+        <div class="flex-1">
+          <input type="text" name="search" value="{{ search }}" placeholder="Search by name or email..."
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+        </div>
+        <button type="submit" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
+          Search
+        </button>
+        {% if search or filter_active or filter_status or filter_gender %}
+        <a href="/admin/mindbody-users?sort={{ sort }}&order={{ order }}"
+          class="px-4 py-2 text-gray-500 text-sm hover:text-gray-700">Clear all</a>
+        {% endif %}
       </div>
-      <button type="submit" class="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
-        Search
-      </button>
-      {% if search %}
-      <a href="/admin/mindbody-users?sort={{ sort }}&order={{ order }}"
-        class="px-4 py-2 text-gray-500 text-sm hover:text-gray-700">Clear</a>
-      {% endif %}
+      <!-- Filter row -->
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-xs text-gray-500 font-medium">Filter:</span>
+        <!-- Active -->
+        <select name="filter_active"
+          class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
+          <option value="">All activity</option>
+          <option value="active" {% if filter_active == 'active' %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if filter_active == 'inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+        <!-- Status -->
+        <select name="filter_status"
+          class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
+          <option value="">All statuses</option>
+          {% for s in statuses %}
+          <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+        <!-- Gender -->
+        <select name="filter_gender"
+          class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-900 outline-none bg-white">
+          <option value="">All genders</option>
+          {% for g in genders %}
+          <option value="{{ g }}" {% if filter_gender == g %}selected{% endif %}>{{ g }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition">
+          Apply
+        </button>
+      </div>
     </form>
   </div>
 
   <!-- Table -->
+  {% set base_params %}sort={{ sort }}&order={{ order }}&search={{ search }}&filter_active={{ filter_active }}&filter_status={{ filter_status }}&filter_gender={{ filter_gender }}{% endset %}
   {% macro sort_url(col) %}
-    /admin/mindbody-users?sort={{ col }}&order={{ 'desc' if sort == col and order == 'asc' else 'asc' }}&search={{ search }}&offset=0
+    /admin/mindbody-users?sort={{ col }}&order={{ 'desc' if sort == col and order == 'asc' else 'asc' }}&search={{ search }}&filter_active={{ filter_active }}&filter_status={{ filter_status }}&filter_gender={{ filter_gender }}&offset=0
   {% endmacro %}
   {% macro sort_icon(col) %}
     {% if sort == col %}{{ '▲' if order == 'asc' else '▼' }}{% endif %}
@@ -131,7 +165,11 @@
           {% if not clients %}
           <tr>
             <td colspan="13" class="px-4 py-12 text-center text-gray-400">
-              {% if search %}No clients match "{{ search }}"{% else %}No data — click "Refresh from MindBody" to fetch clients{% endif %}
+              {% if search or filter_active or filter_status or filter_gender %}
+                No clients match the current filters
+              {% else %}
+                No data — click "Refresh from MindBody" to fetch clients
+              {% endif %}
             </td>
           </tr>
           {% endif %}
@@ -148,11 +186,11 @@
     </p>
     <div class="flex gap-2">
       {% if offset > 0 %}
-      <a href="/admin/mindbody-users?offset={{ offset - page_size }}&search={{ search }}&sort={{ sort }}&order={{ order }}"
+      <a href="/admin/mindbody-users?offset={{ offset - page_size }}&{{ base_params }}"
         class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Previous</a>
       {% endif %}
       {% if offset + page_size < total %}
-      <a href="/admin/mindbody-users?offset={{ offset + page_size }}&search={{ search }}&sort={{ sort }}&order={{ order }}"
+      <a href="/admin/mindbody-users?offset={{ offset + page_size }}&{{ base_params }}"
         class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Next</a>
       {% endif %}
     </div>

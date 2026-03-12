@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import asc, desc
 
 from app.models.mindbody_client import MindBodyClient
+from app.sync.mindbody_client_service import refresh_mindbody_clients
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mindbody-users")
@@ -34,6 +34,9 @@ async def mindbody_user_list(
     sort: str = "last_name",
     order: str = "asc",
     offset: int = 0,
+    filter_active: str = "",
+    filter_status: str = "",
+    filter_gender: str = "",
 ):
     db = request.app.state.db_session_factory()
     page_size = 50
@@ -45,12 +48,30 @@ async def mindbody_user_list(
                 | MindBodyClient.last_name.ilike(f"%{search}%")
                 | MindBodyClient.email.ilike(f"%{search}%")
             )
+        if filter_active == "active":
+            q = q.filter(MindBodyClient.active.is_(True))
+        elif filter_active == "inactive":
+            q = q.filter(MindBodyClient.active.is_(False))
+        if filter_status:
+            q = q.filter(MindBodyClient.status == filter_status)
+        if filter_gender:
+            q = q.filter(MindBodyClient.gender == filter_gender)
 
         sort_col = _SORTABLE.get(sort, MindBodyClient.last_name)
         q = q.order_by(asc(sort_col) if order == "asc" else desc(sort_col))
 
         total = q.count()
         clients = q.offset(offset).limit(page_size).all()
+
+        # Distinct values for filter dropdowns
+        statuses = [
+            r[0] for r in db.query(MindBodyClient.status).distinct().order_by(MindBodyClient.status).all()
+            if r[0]
+        ]
+        genders = [
+            r[0] for r in db.query(MindBodyClient.gender).distinct().order_by(MindBodyClient.gender).all()
+            if r[0]
+        ]
 
         # Last refresh timestamp
         latest = db.query(MindBodyClient.last_fetched_at).order_by(
@@ -72,6 +93,11 @@ async def mindbody_user_list(
                 "offset": offset,
                 "page_size": page_size,
                 "last_fetched_at": last_fetched_at,
+                "filter_active": filter_active,
+                "filter_status": filter_status,
+                "filter_gender": filter_gender,
+                "statuses": statuses,
+                "genders": genders,
             },
         )
     finally:
@@ -80,54 +106,12 @@ async def mindbody_user_list(
 
 @router.post("/refresh")
 async def refresh_mindbody_users(request: Request):
-    """Fetch all MindBody clients and upsert into the local DB."""
+    """Fetch all MindBody clients and replace the local DB cache."""
     db = request.app.state.db_session_factory()
     try:
         engine = request.app.state.sync_engine
         clients = await engine.mindbody.get_all_clients()
-        now = datetime.now(timezone.utc)
-
-        for c in clients:
-            mid = str(c.get("Id", "")).strip()
-            if not mid:
-                continue
-            existing = db.query(MindBodyClient).filter_by(mindbody_id=mid).first()
-            if existing:
-                existing.unique_id = c.get("UniqueId")
-                existing.first_name = c.get("FirstName", "")
-                existing.last_name = c.get("LastName", "")
-                existing.email = c.get("Email")
-                existing.mobile_phone = c.get("MobilePhone")
-                existing.home_phone = c.get("HomePhone")
-                existing.work_phone = c.get("WorkPhone")
-                existing.status = c.get("Status")
-                existing.active = bool(c.get("Active", False))
-                existing.birth_date = c.get("BirthDate")
-                existing.gender = c.get("Gender")
-                existing.created_at_mb = c.get("CreationDate")
-                existing.last_modified_at_mb = c.get("LastModifiedDateTime")
-                existing.photo_url = c.get("PhotoUrl")
-                existing.last_fetched_at = now
-            else:
-                db.add(MindBodyClient(
-                    mindbody_id=mid,
-                    unique_id=c.get("UniqueId"),
-                    first_name=c.get("FirstName", ""),
-                    last_name=c.get("LastName", ""),
-                    email=c.get("Email"),
-                    mobile_phone=c.get("MobilePhone"),
-                    home_phone=c.get("HomePhone"),
-                    work_phone=c.get("WorkPhone"),
-                    status=c.get("Status"),
-                    active=bool(c.get("Active", False)),
-                    birth_date=c.get("BirthDate"),
-                    gender=c.get("Gender"),
-                    created_at_mb=c.get("CreationDate"),
-                    last_modified_at_mb=c.get("LastModifiedDateTime"),
-                    photo_url=c.get("PhotoUrl"),
-                    last_fetched_at=now,
-                ))
-
+        refresh_mindbody_clients(db, clients)
         db.commit()
         logger.info("Refreshed %d MindBody clients into DB", len(clients))
     except Exception:

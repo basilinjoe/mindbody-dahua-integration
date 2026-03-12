@@ -1,0 +1,69 @@
+{% set active_jobs = jobs | selectattr("status", "in", ["pending", "running"]) | list %}
+<div id="export-jobs-panel"
+  {% if active_jobs %}
+    hx-get="/admin/exports/jobs"
+    hx-trigger="every 3s"
+    hx-swap="outerHTML"
+  {% endif %}
+  class="bg-white rounded-xl border border-gray-200 p-4">
+
+  <div class="flex items-center justify-between mb-3">
+    <p class="text-sm font-medium text-gray-700">Export Jobs</p>
+    {% if active_jobs %}
+    <span class="inline-flex items-center gap-1.5 text-xs text-blue-600">
+      <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+      Processing…
+    </span>
+    {% endif %}
+  </div>
+
+  <div class="space-y-0 divide-y divide-gray-100">
+    {% for job in jobs %}
+    <div class="flex items-center justify-between py-2.5">
+      <div class="flex items-center gap-2.5">
+        {% if job.status == "pending" %}
+          <span class="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0"></span>
+          <span class="text-sm text-gray-500">Queued</span>
+        {% elif job.status == "running" %}
+          <svg class="w-4 h-4 animate-spin text-blue-600 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <span class="text-sm text-blue-700">Building ZIP…</span>
+        {% elif job.status == "complete" %}
+          <span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
+          <span class="text-sm text-green-700">Ready</span>
+          {% if job.file_name %}
+          <span class="text-xs text-gray-400">{{ job.file_name }}</span>
+          {% endif %}
+        {% else %}
+          <span class="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"></span>
+          <span class="text-sm text-red-700">Failed{% if job.error_msg %}: {{ job.error_msg[:80] }}{% endif %}</span>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-gray-400">
+          {{ job.created_at.strftime('%b %d %H:%M') }}
+        </span>
+        {% if job.status == "complete" %}
+        <a href="/admin/exports/{{ job.id }}/download"
+          hx-boost="false"
+          class="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-xs font-medium">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Download
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not jobs %}
+    <p class="text-sm text-gray-400 py-2">No exports yet</p>
+    {% endif %}
+  </div>
+</div>

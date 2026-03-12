@@ -1,0 +1,11 @@
+[run]
+source = app
+branch = True
+omit =
+    app/admin/devices.py
+    app/admin/members.py
+    app/admin/mindbody_users.py
+
+[report]
+show_missing = True
+skip_covered = False

@@ -32,9 +32,9 @@ async def dashboard(request: Request):
         stats = _get_stats(db)
         recent_logs = db.query(SyncLog).order_by(SyncLog.created_at.desc()).limit(10).all()
         return request.app.state.templates.TemplateResponse(
+            request,
             "dashboard.html",
             {
-                "request": request,
                 "session_user": request.state.user,
                 "active_page": "dashboard",
                 "stats": stats,
@@ -52,8 +52,9 @@ async def stats_partial(request: Request):
     try:
         stats = _get_stats(db)
         return request.app.state.templates.TemplateResponse(
+            request,
             "partials/stats.html",
-            {"request": request, "stats": stats},
+            {"stats": stats},
         )
     finally:
         db.close()

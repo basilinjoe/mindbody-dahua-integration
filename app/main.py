@@ -4,9 +4,11 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Callable
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session, sessionmaker
 from starlette.templating import Jinja2Templates
 
 from app.admin.router import AdminAuthMiddleware, admin_router
@@ -16,63 +18,99 @@ from app.config import Settings
 from app.models.admin_user import AdminUser
 from app.models.database import init_db
 from app.models.device import DahuaDevice
+from app.models.export_job import ExportJob, ExportStatus  # noqa: F401 — registers table
 from app.sync.engine import SyncEngine
 from app.sync.scheduler import SyncScheduler
 
 BASE_DIR = Path(__file__).resolve().parent
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    settings = Settings()
+class NoOpScheduler:
+    """Scheduler shim used when background scheduling is intentionally disabled."""
 
-    # Logging
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level.upper(), logging.INFO),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
-    logger = logging.getLogger("app")
-    logger.info("Starting MindBody-Dahua Gate Sync")
+    @property
+    def is_sync_paused(self) -> bool:
+        return False
 
-    # Database
-    db_session_factory = init_db(settings.database_url)
+    def pause_sync(self) -> None:
+        return None
 
-    # Seed admin user on first boot
-    _seed_admin(db_session_factory, settings)
+    def resume_sync(self) -> None:
+        return None
 
-    # Seed Dahua devices from env config
-    _seed_devices(db_session_factory, settings)
+    def stop(self) -> None:
+        return None
 
-    # MindBody client
-    mb_client = MindBodyClient(settings)
 
-    # Sync engine
-    sync_engine = SyncEngine(mb_client, db_session_factory, settings)
+def _build_lifespan(
+    *,
+    settings: Settings | None = None,
+    start_scheduler: bool = True,
+    db_session_factory_override: sessionmaker[Session] | None = None,
+    mindbody_client_factory: Callable[[Settings], MindBodyClient] | None = None,
+):
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app_settings = settings or Settings()
 
-    # Templates
-    templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+        # Logging
+        logging.basicConfig(
+            level=getattr(logging, app_settings.log_level.upper(), logging.INFO),
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
+        logger = logging.getLogger("app")
+        logger.info("Starting MindBody-Dahua Gate Sync")
 
-    # Store on app.state for route handlers
-    app.state.settings = settings
-    app.state.db_session_factory = db_session_factory
-    app.state.sync_engine = sync_engine
-    app.state.templates = templates
+        # Database
+        db_session_factory = db_session_factory_override or init_db(app_settings.database_url)
 
-    # Scheduler
-    scheduler = SyncScheduler(
-        sync_engine,
-        sync_interval_min=settings.sync_interval_minutes,
-        health_interval_min=settings.device_health_interval_minutes,
-    )
-    scheduler.start()
-    app.state.scheduler = scheduler
+        # Seed admin user on first boot
+        _seed_admin(db_session_factory, app_settings)
 
-    yield
+        # Seed Dahua devices from env config
+        _seed_devices(db_session_factory, app_settings)
 
-    # Cleanup
-    scheduler.stop()
-    await mb_client.close()
-    logger.info("Shutdown complete")
+        # Reset any export jobs that were stuck in-flight when the server last stopped
+        _recover_stuck_export_jobs(db_session_factory)
+
+        # MindBody client
+        mb_factory = mindbody_client_factory or MindBodyClient
+        mb_client = mb_factory(app_settings)
+
+        # Sync engine
+        sync_engine = SyncEngine(mb_client, db_session_factory, app_settings)
+
+        # Templates
+        templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+        # Store on app.state for route handlers
+        app.state.settings = app_settings
+        app.state.db_session_factory = db_session_factory
+        app.state.sync_engine = sync_engine
+        app.state.templates = templates
+
+        # Scheduler
+        scheduler: SyncScheduler | NoOpScheduler
+        if start_scheduler:
+            scheduler = SyncScheduler(
+                sync_engine,
+                sync_interval_min=app_settings.sync_interval_minutes,
+                health_interval_min=app_settings.device_health_interval_minutes,
+                db_session_factory=db_session_factory,
+            )
+            scheduler.start()
+        else:
+            scheduler = NoOpScheduler()
+        app.state.scheduler = scheduler
+
+        yield
+
+        # Cleanup
+        scheduler.stop()
+        await mb_client.close()
+        logger.info("Shutdown complete")
+
+    return lifespan
 
 
 def _seed_admin(db_session_factory, settings: Settings) -> None:
@@ -141,18 +179,52 @@ def _seed_devices(db_session_factory, settings: Settings) -> None:
         db.close()
 
 
-app = FastAPI(
-    title="MindBody-Dahua Gate Sync",
-    version="1.0.0",
-    lifespan=lifespan,
-)
+def _recover_stuck_export_jobs(db_session_factory) -> None:
+    db = db_session_factory()
+    try:
+        stuck = (
+            db.query(ExportJob)
+            .filter(ExportJob.status.in_([ExportStatus.pending, ExportStatus.running]))
+            .all()
+        )
+        for job in stuck:
+            job.status = ExportStatus.failed
+            job.error_msg = "Server restarted during export"
+        if stuck:
+            db.commit()
+            logging.getLogger("app").info("Reset %d stuck export job(s) to failed", len(stuck))
+    finally:
+        db.close()
 
-# Middleware
-app.add_middleware(AdminAuthMiddleware)
 
-# Static files
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+def create_app(
+    *,
+    settings: Settings | None = None,
+    start_scheduler: bool = True,
+    db_session_factory_override: sessionmaker[Session] | None = None,
+    mindbody_client_factory: Callable[[Settings], MindBodyClient] | None = None,
+) -> FastAPI:
+    app = FastAPI(
+        title="MindBody-Dahua Gate Sync",
+        version="1.0.0",
+        lifespan=_build_lifespan(
+            settings=settings,
+            start_scheduler=start_scheduler,
+            db_session_factory_override=db_session_factory_override,
+            mindbody_client_factory=mindbody_client_factory,
+        ),
+    )
 
-# Routers
-app.include_router(api_router)
-app.include_router(admin_router)
+    # Middleware
+    app.add_middleware(AdminAuthMiddleware)
+
+    # Static files
+    app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+    # Routers
+    app.include_router(api_router)
+    app.include_router(admin_router)
+    return app
+
+
+app = create_app()

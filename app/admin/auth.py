@@ -33,7 +33,7 @@ def get_current_user(request: Request) -> str | None:
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     templates = request.app.state.templates
-    return templates.TemplateResponse("login.html", {"request": request, "session_user": None, "error": None})
+    return templates.TemplateResponse(request, "login.html", {"request": request, "session_user": None, "error": None})
 
 
 @router.post("/login")
@@ -63,6 +63,7 @@ async def login_submit(request: Request):
         db.close()
 
     return templates.TemplateResponse(
+        request,
         "login.html",
         {"request": request, "session_user": None, "error": "Invalid username or password"},
     )

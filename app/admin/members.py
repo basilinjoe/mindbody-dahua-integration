@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import csv
-import io
 import logging
-import re
-import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.models.device import DahuaDevice
 from app.models.member import SyncedMember
@@ -46,7 +42,6 @@ async def member_list(
 
         total = q.count()
         members = q.order_by(SyncedMember.last_name).offset(offset).limit(page_size).all()
-        devices = db.query(DahuaDevice).filter_by(is_enabled=True).order_by(DahuaDevice.name).all()
 
         return request.app.state.templates.TemplateResponse(
             "members/list.html",
@@ -60,7 +55,6 @@ async def member_list(
                 "filter": filter,
                 "offset": offset,
                 "page_size": page_size,
-                "devices": devices,
             },
         )
     finally:
@@ -130,95 +124,6 @@ async def member_add_submit(
     finally:
         db.close()
 
-
-@router.get("/export/mindbody.csv")
-async def export_mindbody_csv(request: Request):
-    """Download all MindBody clients as CSV."""
-    engine = request.app.state.sync_engine
-    clients = await engine.mindbody.get_all_clients()
-
-    fieldnames = [
-        "mindbody_id", "first_name", "last_name", "email",
-        "mobile_phone", "home_phone", "work_phone",
-        "status", "active", "birth_date", "gender", "created_at", "photo_url",
-    ]
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    for c in clients:
-        writer.writerow({
-            "mindbody_id": c.get("Id", ""),
-            "first_name": c.get("FirstName", ""),
-            "last_name": c.get("LastName", ""),
-            "email": c.get("Email", ""),
-            "mobile_phone": c.get("MobilePhone", ""),
-            "home_phone": c.get("HomePhone", ""),
-            "work_phone": c.get("WorkPhone", ""),
-            "status": c.get("Status", ""),
-            "active": c.get("Active", ""),
-            "birth_date": c.get("BirthDate", ""),
-            "gender": c.get("Gender", ""),
-            "created_at": c.get("CreationDate", ""),
-            "photo_url": c.get("PhotoUrl", ""),
-        })
-
-    buf.seek(0)
-    return StreamingResponse(
-        iter([buf.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=mindbody_users.csv"},
-    )
-
-
-@router.get("/export/dahua/{device_id}.csv")
-async def export_dahua_csv(request: Request, device_id: int):
-    """Download all users from a single Dahua device as CSV."""
-    db = request.app.state.db_session_factory()
-    try:
-        device = db.query(DahuaDevice).filter_by(id=device_id, is_enabled=True).first()
-        if not device:
-            from fastapi.responses import Response
-            return Response(content="Device not found or not enabled", status_code=404)
-        device_name = device.name
-    finally:
-        db.close()
-
-    engine = request.app.state.sync_engine
-    engine.refresh_devices(db := request.app.state.db_session_factory())
-    db.close()
-
-    dahua_client = engine._dahua_clients.get(device_id)
-    if not dahua_client:
-        from fastapi.responses import Response
-        return Response(content="Device client not available", status_code=404)
-
-    users = await dahua_client.get_all_users()
-
-    fieldnames = [
-        "user_id", "card_name", "card_no", "card_status",
-        "card_type", "valid_date_start", "valid_date_end",
-    ]
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    for u in users:
-        writer.writerow({
-            "user_id": u.get("UserID", ""),
-            "card_name": u.get("CardName", ""),
-            "card_no": u.get("CardNo", ""),
-            "card_status": u.get("CardStatus", ""),
-            "card_type": u.get("CardType", ""),
-            "valid_date_start": u.get("ValidDateStart", ""),
-            "valid_date_end": u.get("ValidDateEnd", ""),
-        })
-
-    safe_name = re.sub(r"[^\w\-]", "_", device_name)
-    buf.seek(0)
-    return StreamingResponse(
-        iter([buf.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={safe_name}_users.csv"},
-    )
 
 
 @router.get("/{member_id}", response_class=HTMLResponse)

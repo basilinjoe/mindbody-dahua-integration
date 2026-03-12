@@ -37,9 +37,9 @@ async def sync_logs(
 
         scheduler = request.app.state.scheduler
         return request.app.state.templates.TemplateResponse(
+            request,
             "sync/logs.html",
             {
-                "request": request,
                 "session_user": request.state.user,
                 "active_page": "sync",
                 "logs": logs,
