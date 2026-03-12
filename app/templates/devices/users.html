@@ -2,22 +2,17 @@
 {% block title %}{{ device.name }} — Users{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-  <!-- Breadcrumb -->
-  <nav class="flex items-center gap-2 text-sm text-gray-500">
-    <a href="/admin/devices" class="hover:text-gray-700">Devices</a>
-    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    <span class="text-gray-900">{{ device.name }}</span>
-  </nav>
-
-  <!-- Header -->
+<div class="flex flex-col gap-2 h-full">
+  <!-- Compact top bar: breadcrumb + title + stats + actions in two lines -->
   <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-900">{{ device.name }}</h1>
-      <p class="text-sm text-gray-500 mt-1">{{ device.host }}:{{ device.port }} — {{ users | length }} user(s) on device</p>
-    </div>
-    <div class="flex items-center gap-2">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+    <div class="flex items-center gap-2 min-w-0">
+      <nav class="flex items-center gap-1 text-xs text-gray-400 flex-shrink-0">
+        <a href="/admin/devices" class="hover:text-gray-600">Devices</a>
+        <span>/</span>
+      </nav>
+      <h1 class="text-sm font-semibold text-gray-900 truncate">{{ device.name }}</h1>
+      <span class="text-xs text-gray-400 flex-shrink-0">{{ device.host }}:{{ device.port }}</span>
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0
         {% if device.status == 'online' %}bg-green-50 text-green-700
         {% elif device.status == 'offline' %}bg-red-50 text-red-700
         {% else %}bg-gray-100 text-gray-600{% endif %}">
@@ -27,205 +22,267 @@
           {% else %}bg-gray-400{% endif %}"></span>
         {{ device.status | capitalize }}
       </span>
+    </div>
+    <div class="flex items-center gap-3 flex-shrink-0">
+      <!-- Inline stats -->
+      <div class="flex items-center gap-3 text-xs">
+        <span class="text-gray-500"><span class="font-semibold text-gray-800">{{ users | length }}</span> total</span>
+        <span class="text-gray-300">|</span>
+        <span class="text-green-600"><span class="font-semibold">{{ users | selectattr('CardStatus', 'equalto', '0') | list | length }}</span> active</span>
+        <span class="text-gray-300">|</span>
+        <span class="text-amber-600"><span class="font-semibold">{{ users | rejectattr('CardStatus', 'equalto', '0') | list | length }}</span> frozen/other</span>
+      </div>
       <button hx-post="/admin/devices/{{ device.id }}/health" hx-swap="none"
-        class="px-3 py-1.5 border border-gray-200 text-sm rounded-lg text-gray-600 hover:bg-gray-50 transition">
+        class="px-2.5 py-1 border border-gray-200 text-xs rounded-lg text-gray-600 hover:bg-gray-50 transition">
         Refresh Status
       </button>
     </div>
   </div>
 
   {% if error %}
-  <div class="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
-    <div class="flex items-center gap-2">
-      <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      {{ error }}
-    </div>
+  <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    {{ error }}
   </div>
   {% endif %}
 
-  <!-- Stats -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
-      <p class="text-sm text-gray-500">Total Users</p>
-      <p class="text-2xl font-bold text-gray-900 mt-1">{{ users | length }}</p>
-    </div>
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
-      <p class="text-sm text-gray-500">Active (Normal)</p>
-      <p class="text-2xl font-bold text-green-600 mt-1">{{ users | selectattr('CardStatus', 'equalto', '0') | list | length }}</p>
-    </div>
-    <div class="bg-white rounded-xl border border-gray-200 p-5">
-      <p class="text-sm text-gray-500">Frozen / Other</p>
-      <p class="text-2xl font-bold text-amber-600 mt-1">{{ users | rejectattr('CardStatus', 'equalto', '0') | list | length }}</p>
-    </div>
-  </div>
-
-  <!-- User Table -->
-  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-    <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
-      <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-gray-700">Users on Device</h2>
-        <div class="flex items-center gap-3">
-          <!-- Status filter -->
-          <div class="flex items-center gap-1">
-            <button onclick="setFilter('status','all')" data-filter-group="status" data-filter-value="all"
-              class="filter-btn active px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white transition">All</button>
-            <button onclick="setFilter('status','0')" data-filter-group="status" data-filter-value="0"
-              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Normal</button>
-            <button onclick="setFilter('status','4')" data-filter-group="status" data-filter-value="4"
-              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Frozen</button>
-            <button onclick="setFilter('status','other')" data-filter-group="status" data-filter-value="other"
-              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Other</button>
-          </div>
-          <div class="w-px h-5 bg-gray-200"></div>
-          <!-- Synced filter -->
-          <div class="flex items-center gap-1">
-            <button onclick="setFilter('synced','all')" data-filter-group="synced" data-filter-value="all"
-              class="filter-btn active px-2.5 py-1 rounded-full text-xs font-medium bg-gray-900 text-white transition">All</button>
-            <button onclick="setFilter('synced','yes')" data-filter-group="synced" data-filter-value="yes"
-              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Synced</button>
-            <button onclick="setFilter('synced','no')" data-filter-group="synced" data-filter-value="no"
-              class="filter-btn px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Unsynced</button>
-          </div>
-          <div class="w-px h-5 bg-gray-200"></div>
-          <input type="text" id="user-search" placeholder="Search by name or ID..."
-            oninput="filterTable(this.value)"
-            class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-64 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+  <!-- Table card -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col min-h-0 flex-1">
+    <!-- Toolbar: row 1 — button filters -->
+    <div class="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between gap-3 flex-shrink-0">
+      <h2 class="text-xs font-semibold text-gray-700 whitespace-nowrap">Users on Device</h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- Status filter -->
+        <div class="flex items-center gap-1">
+          <button onclick="setFilter('status','all')" data-filter-group="status" data-filter-value="all"
+            class="filter-btn active px-2 py-0.5 rounded-full text-xs font-medium bg-gray-900 text-white transition">All</button>
+          <button onclick="setFilter('status','0')" data-filter-group="status" data-filter-value="0"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Normal</button>
+          <button onclick="setFilter('status','4')" data-filter-group="status" data-filter-value="4"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Frozen</button>
+          <button onclick="setFilter('status','other')" data-filter-group="status" data-filter-value="other"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Other</button>
+        </div>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <!-- Synced filter -->
+        <div class="flex items-center gap-1">
+          <button onclick="setFilter('synced','all')" data-filter-group="synced" data-filter-value="all"
+            class="filter-btn active px-2 py-0.5 rounded-full text-xs font-medium bg-gray-900 text-white transition">All</button>
+          <button onclick="setFilter('synced','yes')" data-filter-group="synced" data-filter-value="yes"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Synced</button>
+          <button onclick="setFilter('synced','no')" data-filter-group="synced" data-filter-value="no"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Unsynced</button>
+        </div>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <!-- Card Type filter -->
+        <div class="flex items-center gap-1">
+          <button onclick="setFilter('type','all')" data-filter-group="type" data-filter-value="all"
+            class="filter-btn active px-2 py-0.5 rounded-full text-xs font-medium bg-gray-900 text-white transition">All types</button>
+          <button onclick="setFilter('type','0')" data-filter-group="type" data-filter-value="0"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Ordinary</button>
+          <button onclick="setFilter('type','1')" data-filter-group="type" data-filter-value="1"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">VIP</button>
+          <button onclick="setFilter('type','2')" data-filter-group="type" data-filter-value="2"
+            class="filter-btn px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition">Guest</button>
         </div>
       </div>
     </div>
-    <table class="w-full text-sm" id="users-table">
-      <thead class="bg-gray-50 border-b border-gray-200">
-        <tr>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">UserID</th>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">Name</th>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">Card No</th>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">Status</th>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">Card Type</th>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">Valid Period</th>
-          <th class="text-left px-6 py-3 font-medium text-gray-500">Synced</th>
-          <th class="text-right px-6 py-3 font-medium text-gray-500"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-        {% for user in users %}
-        <tr class="hover:bg-gray-50 transition user-row"
-            data-status="{{ user.CardStatus | default('0') }}"
-            data-synced="{% if user.UserID in synced_ids %}yes{% else %}no{% endif %}"
-        >
-          <td class="px-6 py-3 font-mono text-xs text-gray-700">{{ user.UserID }}</td>
-          <td class="px-6 py-3 text-gray-900 font-medium">{{ user.CardName or '-' }}</td>
-          <td class="px-6 py-3 font-mono text-xs text-gray-500">{{ user.CardNo or '-' }}</td>
-          <td class="px-6 py-3">
-            {% set status = user.CardStatus | default('0') %}
-            {% if status == '0' %}
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-              <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Normal
-            </span>
-            {% elif status == '1' %}
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
-              <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Lost
-            </span>
-            {% elif status == '2' %}
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-              <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Cancelled
-            </span>
-            {% elif status == '4' %}
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-              <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Frozen
-            </span>
-            {% else %}
-            <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
-              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> {{ status }}
-            </span>
-            {% endif %}
-          </td>
-          <td class="px-6 py-3 text-xs text-gray-500">
-            {% set ctype = user.CardType | default('0') %}
-            {% if ctype == '0' %}Ordinary{% elif ctype == '1' %}VIP{% elif ctype == '2' %}Guest{% else %}{{ ctype }}{% endif %}
-          </td>
-          <td class="px-6 py-3 text-xs text-gray-500">
-            {% if user.ValidDateStart and user.ValidDateEnd %}
-              {{ user.ValidDateStart }} — {{ user.ValidDateEnd }}
-            {% else %}
-              No limit
-            {% endif %}
-          </td>
-          <td class="px-6 py-3">
-            {% if user.UserID in synced_ids %}
-            <span class="inline-flex items-center gap-1 text-green-600 text-xs">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-              Yes
-            </span>
-            {% else %}
-            <span class="text-xs text-gray-400">No</span>
-            {% endif %}
-          </td>
-          <td class="px-6 py-3 text-right">
-            <a href="/admin/devices/{{ device.id }}/users/{{ user.UserID }}" class="text-gray-400 hover:text-gray-600">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-            </a>
-          </td>
-        </tr>
-        {% endfor %}
-        {% if not users %}
-        <tr>
-          <td colspan="8" class="px-6 py-12 text-center text-gray-400">
-            {% if error %}Unable to fetch users{% else %}No users on this device{% endif %}
-          </td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Pagination -->
-  <div id="pagination-controls" class="flex items-center justify-between">
-    <p class="text-sm text-gray-500" id="page-info"></p>
-    <div class="flex items-center gap-2">
-      <select id="page-size" onchange="changePageSize(this.value)"
-        class="px-2 py-1.5 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-gray-900 outline-none">
-        <option value="25">25 per page</option>
-        <option value="50">50 per page</option>
-        <option value="100">100 per page</option>
-        <option value="0">Show all</option>
+    <!-- Toolbar: row 2 — text / select filters -->
+    <div class="px-4 py-2 border-b border-gray-200 bg-gray-50 flex items-center gap-2 flex-shrink-0">
+      <input type="text" id="filter-userid" placeholder="UserID…"
+        oninput="applyTextFilters()"
+        class="px-2.5 py-1 border border-gray-300 rounded-lg text-xs w-28 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      <input type="text" id="filter-name" placeholder="Name…"
+        oninput="applyTextFilters()"
+        class="px-2.5 py-1 border border-gray-300 rounded-lg text-xs w-40 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+      <select id="filter-valid"
+        onchange="applyTextFilters()"
+        class="px-2.5 py-1 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+        <option value="">All valid periods</option>
+        <option value="none">No limit</option>
+        <option value="limited">Has limit</option>
+        <option value="active">Active now</option>
+        <option value="expired">Expired</option>
       </select>
-      <div class="flex gap-1" id="page-buttons"></div>
+      <button onclick="clearTextFilters()"
+        class="px-2.5 py-1 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-100 transition">Clear</button>
+    </div>
+
+    <!-- Scrollable table -->
+    <div class="overflow-y-auto flex-1">
+      <table class="w-full text-xs" id="users-table">
+        <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">UserID</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Name</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Card No</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Status</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Card Type</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Valid Period</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Synced</th>
+            <th class="px-3 py-2"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for user in users %}
+          <tr class="hover:bg-gray-50 transition user-row"
+              data-status="{{ user.CardStatus | default('0') }}"
+              data-synced="{% if user.UserID in synced_ids %}yes{% else %}no{% endif %}"
+              data-type="{{ user.CardType | default('0') }}"
+              data-userid="{{ user.UserID | lower }}"
+              data-name="{{ (user.CardName or '') | lower }}"
+              data-valid-start="{{ user.ValidDateStart or '' }}"
+              data-valid-end="{{ user.ValidDateEnd or '' }}"
+          >
+            <td class="px-3 py-1.5 font-mono text-gray-700">{{ user.UserID }}</td>
+            <td class="px-3 py-1.5 text-gray-900 font-medium">{{ user.CardName or '-' }}</td>
+            <td class="px-3 py-1.5 font-mono text-gray-500">{{ user.CardNo or '-' }}</td>
+            <td class="px-3 py-1.5">
+              {% set status = user.CardStatus | default('0') %}
+              {% if status == '0' %}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Normal
+              </span>
+              {% elif status == '1' %}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span> Lost
+              </span>
+              {% elif status == '2' %}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Cancelled
+              </span>
+              {% elif status == '4' %}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Frozen
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> {{ status }}
+              </span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-1.5 text-gray-500">
+              {% set ctype = user.CardType | default('0') %}
+              {% if ctype == '0' %}Ordinary{% elif ctype == '1' %}VIP{% elif ctype == '2' %}Guest{% else %}{{ ctype }}{% endif %}
+            </td>
+            <td class="px-3 py-1.5 text-gray-500">
+              {% if user.ValidDateStart and user.ValidDateEnd %}
+                {{ user.ValidDateStart }} — {{ user.ValidDateEnd }}
+              {% else %}
+                No limit
+              {% endif %}
+            </td>
+            <td class="px-3 py-1.5">
+              {% if user.UserID in synced_ids %}
+              <span class="inline-flex items-center gap-1 text-green-600">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Yes
+              </span>
+              {% else %}
+              <span class="text-gray-400">No</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-1.5 text-right">
+              <a href="/admin/devices/{{ device.id }}/users/{{ user.UserID }}" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not users %}
+          <tr>
+            <td colspan="8" class="px-3 py-10 text-center text-gray-400">
+              {% if error %}Unable to fetch users{% else %}No users on this device{% endif %}
+            </td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination-controls" class="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+      <p class="text-xs text-gray-500" id="page-info"></p>
+      <div class="flex items-center gap-2">
+        <select id="page-size" onchange="changePageSize(this.value)"
+          class="px-2 py-1 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+          <option value="25">25 / page</option>
+          <option value="50">50 / page</option>
+          <option value="100">100 / page</option>
+          <option value="0">All</option>
+        </select>
+        <div class="flex gap-1" id="page-buttons"></div>
+      </div>
     </div>
   </div>
 </div>
 
 <script>
+// Make this page fill the viewport without outer scroll
+(function() {
+  const main = document.querySelector('main');
+  if (main) {
+    main.style.overflow = 'hidden';
+    main.style.display = 'flex';
+    main.style.flexDirection = 'column';
+    const wrapper = main.firstElementChild;
+    if (wrapper) {
+      wrapper.style.flex = '1';
+      wrapper.style.minHeight = '0';
+      wrapper.style.padding = '1rem';
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+    }
+  }
+})();
+
 (function() {
   const allRows = Array.from(document.querySelectorAll('.user-row'));
   let filteredRows = allRows;
   let pageSize = 25;
   let currentPage = 1;
-  let activeFilters = { status: 'all', synced: 'all' };
-  let searchQuery = '';
+  let activeFilters = { status: 'all', synced: 'all', type: 'all' };
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  function getTextFilters() {
+    return {
+      userid: (document.getElementById('filter-userid').value || '').toLowerCase(),
+      name:   (document.getElementById('filter-name').value   || '').toLowerCase(),
+      valid:  document.getElementById('filter-valid').value,
+    };
+  }
+
+  function matchesValid(r, valid) {
+    const start = r.dataset.validStart;
+    const end   = r.dataset.validEnd;
+    const hasLimit = start || end;
+    if (valid === 'none')    return !hasLimit;
+    if (valid === 'limited') return !!hasLimit;
+    if (valid === 'active')  return !!hasLimit && (!start || start <= today) && (!end || end >= today);
+    if (valid === 'expired') return !!end && end < today;
+    return true;
+  }
 
   function applyAllFilters() {
+    const tf = getTextFilters();
     filteredRows = allRows.filter(r => {
-      // Text search
-      if (searchQuery && !r.textContent.toLowerCase().includes(searchQuery)) return false;
-      // Status filter
+      if (tf.userid && !r.dataset.userid.includes(tf.userid)) return false;
+      if (tf.name   && !r.dataset.name.includes(tf.name))     return false;
+      if (tf.valid  && !matchesValid(r, tf.valid))             return false;
       const st = activeFilters.status;
       if (st !== 'all') {
         const rowStatus = r.dataset.status;
         if (st === 'other') { if (rowStatus === '0' || rowStatus === '4') return false; }
         else { if (rowStatus !== st) return false; }
       }
-      // Synced filter
       const sy = activeFilters.synced;
       if (sy !== 'all' && r.dataset.synced !== sy) return false;
+      const ty = activeFilters.type;
+      if (ty !== 'all' && r.dataset.type !== ty) return false;
       return true;
     });
     currentPage = 1;
     render();
-  }
-
-  function applyFilter(query) {
-    searchQuery = query.toLowerCase();
-    applyAllFilters();
   }
 
   function render() {
@@ -239,7 +296,6 @@
     allRows.forEach(r => r.style.display = 'none');
     filteredRows.slice(start, end).forEach(r => r.style.display = '');
 
-    // Page info
     const info = document.getElementById('page-info');
     if (total === 0) {
       info.textContent = 'No users to show';
@@ -249,16 +305,14 @@
       info.textContent = 'Showing all ' + total + ' users';
     }
 
-    // Page buttons
     const btns = document.getElementById('page-buttons');
     btns.innerHTML = '';
     if (pageSize > 0 && totalPages > 1) {
       addBtn(btns, '‹', currentPage > 1, () => { currentPage--; render(); });
-      let pages = getPageNumbers(currentPage, totalPages);
-      pages.forEach(p => {
+      getPageNumbers(currentPage, totalPages).forEach(p => {
         if (p === '...') {
           const sp = document.createElement('span');
-          sp.className = 'px-2 py-1.5 text-sm text-gray-400';
+          sp.className = 'px-1.5 py-1 text-xs text-gray-400';
           sp.textContent = '…';
           btns.appendChild(sp);
         } else {
@@ -272,7 +326,7 @@
   function addBtn(parent, label, enabled, onclick, active) {
     const b = document.createElement('button');
     b.textContent = label;
-    b.className = 'px-3 py-1.5 border rounded-lg text-sm transition ' +
+    b.className = 'px-2 py-1 border rounded text-xs transition ' +
       (active ? 'bg-gray-900 text-white border-gray-900' :
        enabled ? 'border-gray-300 text-gray-700 hover:bg-gray-50' :
        'border-gray-200 text-gray-300 cursor-not-allowed');
@@ -290,12 +344,16 @@
     return pages;
   }
 
-  // Expose to inline handlers
-  window.filterTable = function(query) { applyFilter(query); };
+  window.applyTextFilters = function() { applyAllFilters(); };
+  window.clearTextFilters = function() {
+    document.getElementById('filter-userid').value = '';
+    document.getElementById('filter-name').value = '';
+    document.getElementById('filter-valid').value = '';
+    applyAllFilters();
+  };
   window.changePageSize = function(val) { pageSize = parseInt(val); currentPage = 1; render(); };
   window.setFilter = function(group, value) {
     activeFilters[group] = value;
-    // Update button styles
     document.querySelectorAll('[data-filter-group="' + group + '"]').forEach(btn => {
       if (btn.dataset.filterValue === value) {
         btn.classList.add('bg-gray-900', 'text-white');
