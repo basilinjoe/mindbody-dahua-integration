@@ -56,30 +56,43 @@ class MindBodyClient:
     # ---- Clients ------------------------------------------------------------
 
     @mindbody_retry
-    async def get_clients(self, *, limit: int = 200, offset: int = 0, search_text: str = "") -> list[dict]:
+    async def get_clients(
+        self,
+        *,
+        limit: int = 200,
+        offset: int = 0,
+        search_text: str = "",
+        last_modified_date: datetime | None = None,
+    ) -> list[dict]:
         """Get a page of clients."""
         await self._ensure_token()
         params: dict = {"request.limit": limit, "request.offset": offset}
         if search_text:
             params["request.searchText"] = search_text
+        if last_modified_date:
+            params["request.lastModifiedDate"] = last_modified_date.strftime("%Y-%m-%dT%H:%M:%S")
         resp = await self._http.get(f"{self._base}/client/clients", headers=self._headers(), params=params)
         resp.raise_for_status()
         return resp.json().get("Clients", [])
 
-    async def get_all_clients(self) -> list[dict]:
-        """Auto-paginate through every client."""
+    async def get_all_clients(self, *, modified_since: datetime | None = None) -> list[dict]:
+        """Auto-paginate through all clients, optionally filtered by modification date."""
         all_clients: list[dict] = []
         offset = 0
         page_size = 200
         while True:
-            page = await self.get_clients(limit=page_size, offset=offset)
+            page = await self.get_clients(limit=page_size, offset=offset, last_modified_date=modified_since)
             if not page:
                 break
             all_clients.extend(page)
             if len(page) < page_size:
                 break
             offset += page_size
-        logger.info("Fetched %d total clients from MindBody", len(all_clients))
+        logger.info(
+            "Fetched %d clients from MindBody%s",
+            len(all_clients),
+            f" modified since {modified_since.isoformat()}" if modified_since else "",
+        )
         return all_clients
 
     # ---- Memberships / Contracts -------------------------------------------

@@ -7,7 +7,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import asc, desc
 
 from app.models.mindbody_client import MindBodyClient
-from app.sync.mindbody_client_service import refresh_mindbody_clients
+from app.sync.mindbody_client_service import (
+    get_last_fetched_at,
+    refresh_mindbody_clients,
+    upsert_mindbody_clients,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/mindbody-users")
@@ -105,15 +109,25 @@ async def mindbody_user_list(
 
 
 @router.post("/refresh")
-async def refresh_mindbody_users(request: Request):
-    """Fetch all MindBody clients and replace the local DB cache."""
+async def refresh_mindbody_users(request: Request, full: bool = False):
+    """Refresh the local MindBody client cache.
+
+    By default performs an incremental fetch (only clients modified since the
+    last refresh).  Pass ?full=true to force a complete re-fetch and replace.
+    """
     db = request.app.state.db_session_factory()
     try:
         engine = request.app.state.sync_engine
-        clients = await engine.mindbody.get_all_clients()
-        refresh_mindbody_clients(db, clients)
+        last_fetched = None if full else get_last_fetched_at(db)
+
+        if last_fetched:
+            clients = await engine.mindbody.get_all_clients(modified_since=last_fetched)
+            upsert_mindbody_clients(db, clients)
+        else:
+            clients = await engine.mindbody.get_all_clients()
+            refresh_mindbody_clients(db, clients)
+
         db.commit()
-        logger.info("Refreshed %d MindBody clients into DB", len(clients))
     except Exception:
         db.rollback()
         logger.exception("Failed to refresh MindBody clients")
