@@ -300,6 +300,7 @@ async def device_user_detail(request: Request, device_id: int, user_id: str):
 
         user = None
         error = None
+        device_face_photo = None
         client = DahuaClient(
             host=device.host, port=device.port,
             username=device.username, password=device.password,
@@ -307,6 +308,11 @@ async def device_user_detail(request: Request, device_id: int, user_id: str):
         )
         try:
             user = await client.get_user(user_id)
+            if user:
+                try:
+                    device_face_photo = await client.get_face_photo(user_id)
+                except Exception:
+                    pass  # non-critical
         except Exception as e:
             error = f"Could not connect to device: {e}"
             logger.exception("Failed to fetch user %s from device %d", user_id, device_id)
@@ -325,6 +331,7 @@ async def device_user_detail(request: Request, device_id: int, user_id: str):
                 "device": device,
                 "user": user,
                 "synced_member": synced_member,
+                "device_face_photo": device_face_photo,
                 "error": error,
             },
         )

@@ -159,6 +159,27 @@ class DahuaClient:
         )
         return resp.status_code == 200
 
+    @dahua_retry
+    async def get_face_photo(self, user_id: str) -> str | None:
+        """
+        Fetch the enrolled face photo for a user from the device.
+        Returns the raw base64 JPEG string (no data URI prefix), or None if not found.
+        """
+        params = {
+            "action": "find",
+            "name": "FaceInfo",
+            "condition.UserID": user_id,
+            "startIndex": "0",
+            "count": "1",
+        }
+        resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
+        if resp.status_code != 200:
+            return None
+        for line in resp.text.splitlines():
+            if "PhotoData" in line and "=" in line:
+                return line.partition("=")[2].strip()
+        return None
+
     # ---- Record Querying ---------------------------------------------------
 
     @dahua_retry

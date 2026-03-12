@@ -25,6 +25,11 @@
   <!-- Header -->
   <div class="flex items-start justify-between">
     <div class="flex items-center gap-4">
+      {% if device_face_photo %}
+      <img src="data:image/jpeg;base64,{{ device_face_photo }}"
+        alt="{{ user.CardName or 'User' }}"
+        class="w-14 h-14 rounded-xl object-cover">
+      {% else %}
       <div class="w-14 h-14 rounded-xl flex items-center justify-center text-lg font-bold
         {% set status = user.CardStatus | default('0') %}
         {% if status == '0' %}bg-green-100 text-green-700
@@ -32,6 +37,7 @@
         {% else %}bg-gray-100 text-gray-500{% endif %}">
         {% if user.CardName %}{{ user.CardName[:2] | upper }}{% else %}??{% endif %}
       </div>
+      {% endif %}
       <div>
         <h1 class="text-2xl font-bold text-gray-900">{{ user.CardName or 'Unnamed User' }}</h1>
         <p class="text-sm text-gray-500 mt-0.5">UserID: {{ user.UserID }} &middot; {{ device.name }}</p>
@@ -140,7 +146,12 @@
           </div>
           <div class="flex items-center justify-between">
             <span class="text-gray-500">Face Photo</span>
+            {% if device_face_photo %}
+            <img src="data:image/jpeg;base64,{{ device_face_photo }}"
+              alt="Enrolled photo" class="w-8 h-8 rounded-full object-cover">
+            {% else %}
             <span>{{ 'Yes' if synced_member.has_face_photo else 'No' }}</span>
+            {% endif %}
           </div>
         </div>
         <a href="/admin/members/{{ synced_member.id }}"
