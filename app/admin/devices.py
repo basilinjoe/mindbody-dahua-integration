@@ -51,6 +51,8 @@ async def device_add_submit(
     password: str = Form(...),
     door_ids: str = Form("0"),
     is_enabled: str = Form(""),
+    gate_type: str = Form("all"),
+    enable_integration: str = Form("1"),
 ):
     db = request.app.state.db_session_factory()
     try:
@@ -62,6 +64,8 @@ async def device_add_submit(
             password=password,
             door_ids=door_ids.strip(),
             is_enabled=is_enabled == "1",
+            gate_type=gate_type if gate_type in ("male", "female", "all") else "all",
+            enable_integration=enable_integration == "1",
         )
         db.add(device)
         db.commit()
@@ -103,6 +107,8 @@ async def device_edit_submit(
     password: str = Form(""),
     door_ids: str = Form("0"),
     is_enabled: str = Form(""),
+    gate_type: str = Form("all"),
+    enable_integration: str = Form("1"),
 ):
     db = request.app.state.db_session_factory()
     try:
@@ -118,6 +124,8 @@ async def device_edit_submit(
             device.password = password
         device.door_ids = door_ids.strip()
         device.is_enabled = is_enabled == "1"
+        device.gate_type = gate_type if gate_type in ("male", "female", "all") else "all"
+        device.enable_integration = enable_integration == "1"
         db.commit()
         logger.info("Updated device: %s (%s)", name, host)
         return RedirectResponse(url="/admin/devices", status_code=303)

@@ -56,6 +56,30 @@
           <span>{{ 'Yes' if device.is_enabled else 'No' }}</span>
         </div>
         <div class="flex items-center justify-between">
+          <span class="text-gray-500">Gate Type</span>
+          {% if device.gate_type == 'male' %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">Male</span>
+          {% elif device.gate_type == 'female' %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-pink-100 text-pink-700">Female</span>
+          {% else %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">All</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-gray-500">Integration</span>
+          {% if device.enable_integration %}
+          <span class="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            Enabled
+          </span>
+          {% else %}
+          <span class="inline-flex items-center gap-1 text-red-500 text-xs font-medium">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+            Disabled
+          </span>
+          {% endif %}
+        </div>
+        <div class="flex items-center justify-between">
           <span class="text-gray-500">Last Seen</span>
           <span class="text-xs">{{ device.last_seen_at.strftime('%b %d %H:%M') if device.last_seen_at else 'Never' }}</span>
         </div>
