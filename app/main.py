@@ -16,36 +16,17 @@ from app.api.router import api_router
 from app.clients.mindbody import MindBodyClient
 from app.config import Settings
 from app.models.admin_user import AdminUser
-from app.models.database import init_db
+from app.models.database import init_async_db, init_db
 from app.models.device import DahuaDevice
 from app.models.export_job import ExportJob, ExportStatus  # noqa: F401 — registers table
 from app.sync.engine import SyncEngine
-from app.sync.scheduler import SyncScheduler
 
 BASE_DIR = Path(__file__).resolve().parent
-
-
-class NoOpScheduler:
-    """Scheduler shim used when background scheduling is intentionally disabled."""
-
-    @property
-    def is_sync_paused(self) -> bool:
-        return False
-
-    def pause_sync(self) -> None:
-        return None
-
-    def resume_sync(self) -> None:
-        return None
-
-    def stop(self) -> None:
-        return None
 
 
 def _build_lifespan(
     *,
     settings: Settings | None = None,
-    start_scheduler: bool = True,
     db_session_factory_override: sessionmaker[Session] | None = None,
     mindbody_client_factory: Callable[[Settings], MindBodyClient] | None = None,
 ):
@@ -61,8 +42,11 @@ def _build_lifespan(
         logger = logging.getLogger("app")
         logger.info("Starting MindBody-Dahua Gate Sync")
 
-        # Database
+        # Database (sync — FastAPI routes)
         db_session_factory = db_session_factory_override or init_db(app_settings.database_url)
+
+        # Async database — Prefect tasks
+        init_async_db(app_settings.database_url)
 
         # Seed admin user on first boot
         _seed_admin(db_session_factory, app_settings)
@@ -73,11 +57,11 @@ def _build_lifespan(
         # Reset any export jobs that were stuck in-flight when the server last stopped
         _recover_stuck_export_jobs(db_session_factory)
 
-        # MindBody client
+        # MindBody client — still needed by SyncEngine (export/member routes use it)
         mb_factory = mindbody_client_factory or MindBodyClient
         mb_client = mb_factory(app_settings)
 
-        # Sync engine
+        # Sync engine (still needed by export/member routes that use Dahua clients)
         sync_engine = SyncEngine(mb_client, db_session_factory, app_settings)
 
         # Templates
@@ -89,24 +73,9 @@ def _build_lifespan(
         app.state.sync_engine = sync_engine
         app.state.templates = templates
 
-        # Scheduler
-        scheduler: SyncScheduler | NoOpScheduler
-        if start_scheduler:
-            scheduler = SyncScheduler(
-                sync_engine,
-                sync_interval_min=app_settings.sync_interval_minutes,
-                health_interval_min=app_settings.device_health_interval_minutes,
-                db_session_factory=db_session_factory,
-            )
-            scheduler.start()
-        else:
-            scheduler = NoOpScheduler()
-        app.state.scheduler = scheduler
-
         yield
 
         # Cleanup
-        scheduler.stop()
         await mb_client.close()
         logger.info("Shutdown complete")
 
@@ -200,7 +169,6 @@ def _recover_stuck_export_jobs(db_session_factory) -> None:
 def create_app(
     *,
     settings: Settings | None = None,
-    start_scheduler: bool = True,
     db_session_factory_override: sessionmaker[Session] | None = None,
     mindbody_client_factory: Callable[[Settings], MindBodyClient] | None = None,
 ) -> FastAPI:
@@ -209,7 +177,6 @@ def create_app(
         version="1.0.0",
         lifespan=_build_lifespan(
             settings=settings,
-            start_scheduler=start_scheduler,
             db_session_factory_override=db_session_factory_override,
             mindbody_client_factory=mindbody_client_factory,
         ),

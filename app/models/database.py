@@ -62,6 +62,8 @@ def _to_async_url(url: str) -> str:
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
     if url.startswith("sqlite:///"):
         return url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+    if url.startswith("sqlite+pysqlite:///"):
+        return url.replace("sqlite+pysqlite:///", "sqlite+aiosqlite:///", 1)
     return url  # already async or unknown
 
 

@@ -10,7 +10,6 @@ from app.models.device import DahuaDevice
 def test_create_app_registers_stateful_routes_and_static(settings, db_session_factory, fake_mindbody_client) -> None:
     app = create_app(
         settings=settings,
-        start_scheduler=False,
         db_session_factory_override=db_session_factory,
         mindbody_client_factory=lambda _: fake_mindbody_client,
     )
