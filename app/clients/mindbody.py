@@ -63,6 +63,7 @@ class MindBodyClient:
         offset: int = 0,
         search_text: str = "",
         last_modified_date: datetime | None = None,
+        modified_after: datetime | None = None,
     ) -> list[dict]:
         """Get a page of clients."""
         await self._ensure_token()
@@ -71,17 +72,29 @@ class MindBodyClient:
             params["request.searchText"] = search_text
         if last_modified_date:
             params["request.lastModifiedDate"] = last_modified_date.strftime("%Y-%m-%dT%H:%M:%S")
+        if modified_after is not None:
+            params["modifiedAfter"] = modified_after.isoformat()
         resp = await self._http.get(f"{self._base}/client/clients", headers=self._headers(), params=params)
         resp.raise_for_status()
         return resp.json().get("Clients", [])
 
-    async def get_all_clients(self, *, modified_since: datetime | None = None) -> list[dict]:
+    async def get_all_clients(
+        self,
+        *,
+        modified_since: datetime | None = None,
+        modified_after: datetime | None = None,
+    ) -> list[dict]:
         """Auto-paginate through all clients, optionally filtered by modification date."""
         all_clients: list[dict] = []
         offset = 0
         page_size = 200
         while True:
-            page = await self.get_clients(limit=page_size, offset=offset, last_modified_date=modified_since)
+            page = await self.get_clients(
+                limit=page_size,
+                offset=offset,
+                last_modified_date=modified_since,
+                modified_after=modified_after,
+            )
             if not page:
                 break
             all_clients.extend(page)
