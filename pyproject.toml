@@ -1,0 +1,32 @@
+[project]
+name = "mind-body-dahua"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.115.6",
+    "uvicorn[standard]==0.34.0",
+    "httpx==0.28.1",
+    "sqlalchemy[asyncio]==2.0.36",
+    "asyncpg==0.30.0",
+    "psycopg2-binary==2.9.9",
+    "pydantic-settings==2.7.1",
+    "pydantic==2.10.4",
+    "prefect==3.4.1",
+    "pillow==11.1.0",
+    "tenacity==9.0.0",
+    "python-multipart==0.0.18",
+    "jinja2>=3.1.4",
+    "itsdangerous==2.2.0",
+    "passlib[bcrypt]==1.7.4",
+    "bcrypt==4.2.1",
+    "aiosqlite==0.20.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.5",
+    "pytest-asyncio==0.25.3",
+    "pytest-cov==6.0.0",
+    "pytest-mock==3.14.0",
+    "respx==0.22.0",
+]

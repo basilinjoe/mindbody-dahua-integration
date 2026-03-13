@@ -20,7 +20,7 @@ import logging
 import os
 from datetime import timedelta
 
-from prefect import serve
+from prefect import aserve
 from prefect.client.orchestration import get_client
 from prefect.variables import Variable
 
@@ -50,6 +50,50 @@ async def ensure_concurrency_limits(device_ids: list[int]) -> None:
                 pass
 
 
+async def _sync_variables_from_env() -> None:
+    """Set Prefect Variables from env vars when provided, otherwise leave existing values."""
+    mapping = {
+        "SYNC_INTERVAL_MINUTES": "sync_interval_minutes",
+        "HEALTH_INTERVAL_MINUTES": "health_interval_minutes",
+        "PHOTO_MAX_SIZE_KB": "photo_max_size_kb",
+    }
+    for env_key, var_name in mapping.items():
+        value = os.environ.get(env_key)
+        if value is not None:
+            await Variable.set(var_name, value, overwrite=True)
+            logger.info("Prefect variable '%s' set to %s (from env)", var_name, value)
+
+
+async def _create_block_from_env() -> None:
+    """Create or update the MindBodyCredentials block 'production' from env vars.
+
+    If any of the required MINDBODY_* env vars are missing, this is a no-op
+    and the block must be created manually via the Prefect UI.
+    """
+    api_key = os.environ.get("MINDBODY_API_KEY")
+    site_id = os.environ.get("MINDBODY_SITE_ID")
+    username = os.environ.get("MINDBODY_USERNAME")
+    password = os.environ.get("MINDBODY_PASSWORD")
+    base_url = os.environ.get("MINDBODY_BASE_URL", "https://api.mindbodyonline.com/public/v6")
+
+    if not all([api_key, site_id, username, password]):
+        logger.info(
+            "MINDBODY_API_KEY / MINDBODY_SITE_ID / MINDBODY_USERNAME / MINDBODY_PASSWORD "
+            "not all set — skipping block auto-creation (create manually via Prefect UI)"
+        )
+        return
+
+    block = MindBodyCredentials(
+        api_key=api_key,       # type: ignore[arg-type]
+        site_id=site_id,       # type: ignore[arg-type]
+        username=username,     # type: ignore[arg-type]
+        password=password,     # type: ignore[arg-type]
+        base_url=base_url,
+    )
+    await block.save("production", overwrite=True)
+    logger.info("MindBodyCredentials block 'production' created/updated from env vars")
+
+
 async def _setup() -> tuple[int, int]:
     """Initialise DB, register block types, set up concurrency limits."""
     logging.basicConfig(
@@ -77,13 +121,19 @@ async def _setup() -> tuple[int, int]:
 
     # Register block type with Prefect server
     try:
-        MindBodyCredentials.register_type_and_schema()
+        await MindBodyCredentials.register_type_and_schema()
         logger.info("MindBodyCredentials block type registered")
     except Exception as e:
         logger.warning("Could not register block type (server may not be ready): %s", e)
 
+    # Auto-create block instance from env vars if provided
+    await _create_block_from_env()
+
     # Concurrency limits
     await ensure_concurrency_limits(device_ids)
+
+    # Sync variables from env vars (idempotent)
+    await _sync_variables_from_env()
 
     # Read schedule intervals from Prefect Variables
     interval = int(await Variable.get("sync_interval_minutes", default="30"))
@@ -96,15 +146,15 @@ async def _setup() -> tuple[int, int]:
 async def main() -> None:
     interval, health_interval = await _setup()
 
-    await serve(
+    await aserve(
         # Webhook/manual trigger: single member sync
-        sync_member_flow.to_deployment(
+        await sync_member_flow.ato_deployment(
             name="default",
             tags=["webhook"],
         ),
 
         # Incremental sync — every N minutes, only modified members
-        sync_integration_flow.to_deployment(
+        await sync_integration_flow.ato_deployment(
             name="incremental",
             interval=timedelta(minutes=interval),
             parameters={"force_full": False, "sync_type": "scheduled"},
@@ -112,7 +162,7 @@ async def main() -> None:
         ),
 
         # Full reconciliation — daily 2 AM, catches lapsed memberships
-        sync_integration_flow.to_deployment(
+        await sync_integration_flow.ato_deployment(
             name="full",
             cron="0 2 * * *",
             parameters={"force_full": True, "sync_type": "scheduled"},
@@ -120,7 +170,7 @@ async def main() -> None:
         ),
 
         # Scheduled health check
-        device_health_flow.to_deployment(
+        await device_health_flow.ato_deployment(
             name="scheduled",
             interval=timedelta(minutes=health_interval),
             tags=["health"],

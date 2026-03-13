@@ -12,7 +12,7 @@ from sqlalchemy import select, update
 from app.clients.dahua import DahuaClient
 from app.clients.mindbody import MindBodyClient
 from app.config import Settings
-from app.models.database import AsyncSessionLocal
+from app.models.database import _get_async_session_factory
 from app.models.device import DahuaDevice
 from app.models.member import SyncedMember
 from app.models.member_device_enrollment import MemberDeviceEnrollment
@@ -49,9 +49,7 @@ def _settings_from_creds(creds: MindBodyCredentials) -> Settings:
 
 async def _get_dahua_client(device_id: int) -> tuple[DahuaClient, DahuaDevice]:
     """Load device credentials from DB and create a DahuaClient. Not a task."""
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async DB not initialised")
-    async with AsyncSessionLocal() as db:
+    async with _get_async_session_factory()() as db:
         result = await db.execute(select(DahuaDevice).where(DahuaDevice.id == device_id))
         device = result.scalar_one()
     return (
@@ -141,9 +139,7 @@ async def load_device_ids_by_gate_type(gate_type: str) -> list[int]:
     gate_type="all" returns ALL enabled devices with integration enabled.
     Otherwise returns devices where gate_type matches exactly.
     """
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async DB not initialised")
-    async with AsyncSessionLocal() as db:
+    async with _get_async_session_factory()() as db:
         stmt = (
             select(DahuaDevice.id)
             .where(DahuaDevice.is_enabled.is_(True))
@@ -163,9 +159,7 @@ async def load_enrollments_for_device(device_id: int) -> dict[str, MemberDeviceE
     Return active enrollments for a specific device.
     Key: mindbody_client_id → MemberDeviceEnrollment row.
     """
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async DB not initialised")
-    async with AsyncSessionLocal() as db:
+    async with _get_async_session_factory()() as db:
         result = await db.execute(
             select(SyncedMember.mindbody_client_id, MemberDeviceEnrollment)
             .join(MemberDeviceEnrollment, MemberDeviceEnrollment.synced_member_id == SyncedMember.id)
@@ -177,9 +171,7 @@ async def load_enrollments_for_device(device_id: int) -> dict[str, MemberDeviceE
 @task(name="load-active-enrollments-for-member", tags=["db"])
 async def load_active_enrollments_for_member(client_id: str) -> list[MemberDeviceEnrollment]:
     """Return all active device enrollments for a given MindBody client_id."""
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async DB not initialised")
-    async with AsyncSessionLocal() as db:
+    async with _get_async_session_factory()() as db:
         result = await db.execute(
             select(MemberDeviceEnrollment)
             .join(SyncedMember, SyncedMember.id == MemberDeviceEnrollment.synced_member_id)
@@ -222,9 +214,7 @@ async def enroll_on_device(device_id: int, member: dict, photo_max_kb: int = 200
             await client.close()
 
     # Record enrollment in DB
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async DB not initialised")
-    async with AsyncSessionLocal() as db:
+    async with _get_async_session_factory()() as db:
         # Get or create SyncedMember
         result = await db.execute(
             select(SyncedMember).where(SyncedMember.mindbody_client_id == client_id)
@@ -280,8 +270,8 @@ async def deactivate_on_device(device_id: int, dahua_user_id: str, enrollment_id
         finally:
             await client.close()
 
-    if success and enrollment_id and AsyncSessionLocal:
-        async with AsyncSessionLocal() as db:
+    if success and enrollment_id:
+        async with _get_async_session_factory()() as db:
             await db.execute(
                 update(MemberDeviceEnrollment)
                 .where(MemberDeviceEnrollment.id == enrollment_id)
@@ -302,8 +292,8 @@ async def reactivate_on_device(device_id: int, dahua_user_id: str, enrollment_id
         finally:
             await client.close()
 
-    if success and enrollment_id and AsyncSessionLocal:
-        async with AsyncSessionLocal() as db:
+    if success and enrollment_id:
+        async with _get_async_session_factory()() as db:
             await db.execute(
                 update(MemberDeviceEnrollment)
                 .where(MemberDeviceEnrollment.id == enrollment_id)
@@ -327,9 +317,7 @@ async def check_device_health_task(device_id: int) -> bool:
 @task(name="load-all-devices", tags=["db"])
 async def load_all_devices() -> list[DahuaDevice]:
     """Return all enabled Dahua devices for health check."""
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async DB not initialised")
-    async with AsyncSessionLocal() as db:
+    async with _get_async_session_factory()() as db:
         result = await db.execute(
             select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True))
         )

@@ -13,7 +13,14 @@
       "mcp__plugin_serena_serena__read_file",
       "mcp__plugin_serena_serena__list_dir",
       "mcp__plugin_serena_serena__activate_project",
-      "mcp__plugin_serena_serena__search_for_pattern"
+      "mcp__plugin_serena_serena__search_for_pattern",
+      "WebSearch",
+      "WebFetch(domain:docs.prefect.io)",
+      "WebFetch(domain:reference.prefect.io)",
+      "Bash(python -m pytest tests/unit/app/test_main.py -q --tb=long)",
+      "Bash(python -m pytest tests/unit/app/ tests/unit/api/ -q --tb=short)",
+      "Bash(python -m pytest tests/ -q --tb=short)",
+      "Bash(docker compose:*)"
     ]
   }
 }

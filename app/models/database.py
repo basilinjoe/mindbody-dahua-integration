@@ -78,9 +78,17 @@ def get_db():
         db.close()
 
 
+def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Return AsyncSessionLocal, auto-initialising from DATABASE_URL env var if needed."""
+    global AsyncSessionLocal
+    if AsyncSessionLocal is None:
+        import os
+        database_url = os.environ.get("DATABASE_URL", "sqlite:///./data/sync.db")
+        init_async_db(database_url)
+    return AsyncSessionLocal  # type: ignore[return-value]
+
+
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """Async dependency / context manager for Prefect tasks."""
-    if AsyncSessionLocal is None:
-        raise RuntimeError("Async database not initialised. Call init_async_db() first.")
-    async with AsyncSessionLocal() as session:
+    async with _get_async_session_factory()() as session:
         yield session
