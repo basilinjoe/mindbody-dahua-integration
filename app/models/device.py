@@ -19,6 +19,10 @@ class DahuaDevice(Base):
     password: Mapped[str] = mapped_column(String(256), nullable=False)
     door_ids: Mapped[str] = mapped_column(String(64), default="0")
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    gate_type: Mapped[str] = mapped_column(String(32), default="all")
+    # "male" | "female" | "all" — routing key for gender-based sync
+    enable_integration: Mapped[bool] = mapped_column(Boolean, default=True)
+    # When False, this device is excluded from all Prefect sync operations
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="unknown")  # online / offline / error / unknown
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

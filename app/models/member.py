@@ -18,6 +18,8 @@ class SyncedMember(Base):
     first_name: Mapped[str] = mapped_column(String(128), default="")
     last_name: Mapped[str] = mapped_column(String(128), default="")
     email: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # "male" | "female" | None — stored when member is synced from MindBody
     is_active_in_mindbody: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active_in_dahua: Mapped[bool] = mapped_column(Boolean, default=False)
     has_face_photo: Mapped[bool] = mapped_column(Boolean, default=False)
