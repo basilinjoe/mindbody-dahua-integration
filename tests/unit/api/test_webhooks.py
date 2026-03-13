@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -66,15 +67,20 @@ def test_webhook_relevant_event_triggers_sync() -> None:
     payload = {"eventId": "client.updated", "eventData": {"clientId": "12345"}}
     body = json.dumps(payload).encode("utf-8")
 
-    with TestClient(app) as client:
-        resp = client.post(
-            "/webhooks/mindbody",
-            content=body,
-            headers={"X-Mindbody-Signature": _signature(body, "secret"), "Content-Type": "application/json"},
-        )
+    with patch("app.api.webhooks.run_deployment", new_callable=AsyncMock) as mock_deploy:
+        with TestClient(app) as client:
+            resp = client.post(
+                "/webhooks/mindbody",
+                content=body,
+                headers={"X-Mindbody-Signature": _signature(body, "secret"), "Content-Type": "application/json"},
+            )
 
     assert resp.status_code == 200
-    assert app.state.sync_engine.calls == [("12345", "webhook")]
+    mock_deploy.assert_called_once_with(
+        "sync-member/default",
+        parameters={"client_id": "12345", "sync_type": "webhook"},
+        timeout=0,
+    )
 
 
 def test_webhook_irrelevant_event_does_not_trigger_sync() -> None:

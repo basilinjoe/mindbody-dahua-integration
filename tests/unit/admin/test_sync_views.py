@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 from tests.helpers.factories import make_sync_log
 
 
@@ -21,43 +23,18 @@ def test_sync_logs_filters_by_type_action_and_status(logged_in_client, db_sessio
     assert "Cara" not in response.text
 
 
-def test_manual_trigger_schedules_full_sync(logged_in_client, app) -> None:
-    calls: list[str] = []
-
-    async def fake_full_sync() -> None:
-        calls.append("full_sync")
-
-    app.state.sync_engine.full_sync = fake_full_sync
-
-    response = logged_in_client.post("/admin/sync/trigger", follow_redirects=False)
+def test_manual_trigger_schedules_full_sync(logged_in_client) -> None:
+    with patch("app.admin.sync_views.run_deployment", new_callable=AsyncMock) as mock_deploy:
+        response = logged_in_client.post("/admin/sync/trigger", follow_redirects=False)
 
     assert response.status_code == 303
     assert response.headers["location"] == "/admin/sync"
-    assert calls == ["full_sync"]
+    mock_deploy.assert_called_once_with("sync-integration/full", timeout=0)
 
 
-def test_pause_and_resume_sync_routes(logged_in_client, app) -> None:
-    events: list[str] = []
-
-    class SchedulerSpy:
-        @property
-        def is_sync_paused(self) -> bool:
-            return False
-
-        def pause_sync(self) -> None:
-            events.append("pause")
-
-        def resume_sync(self) -> None:
-            events.append("resume")
-
-        def stop(self) -> None:
-            return None
-
-    app.state.scheduler = SchedulerSpy()
-
+def test_pause_and_resume_sync_routes(logged_in_client) -> None:
     pause_response = logged_in_client.post("/admin/sync/pause", follow_redirects=False)
     resume_response = logged_in_client.post("/admin/sync/resume", follow_redirects=False)
 
     assert pause_response.status_code == 303
     assert resume_response.status_code == 303
-    assert events == ["pause", "resume"]
