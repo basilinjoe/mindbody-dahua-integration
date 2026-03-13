@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response
+from prefect.deployments import run_deployment
 
 from app.utils.hmac_verify import verify_mindbody_signature
 
@@ -52,7 +53,17 @@ async def mindbody_webhook(request: Request, background_tasks: BackgroundTasks):
     logger.info("MindBody webhook: event=%s clientId=%s", event_id, client_id)
 
     if event_id in RELEVANT_EVENTS and client_id:
-        sync_engine = request.app.state.sync_engine
-        background_tasks.add_task(sync_engine.sync_single_member, str(client_id), "webhook")
+        async def _trigger_sync():
+            try:
+                await run_deployment(
+                    "sync-member/default",
+                    parameters={"client_id": str(client_id), "sync_type": "webhook"},
+                    timeout=0,  # fire and forget
+                )
+                logger.info("Triggered Prefect sync-member/default for clientId=%s", client_id)
+            except Exception:
+                logger.exception("Failed to trigger Prefect deployment for clientId=%s", client_id)
+
+        background_tasks.add_task(_trigger_sync)
 
     return Response(status_code=200)

@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from prefect.deployments import run_deployment
 
 from app.models.sync_log import SyncLog
 
@@ -35,7 +36,7 @@ async def sync_logs(
         total = q.count()
         logs = q.order_by(SyncLog.created_at.desc()).offset(offset).limit(page_size).all()
 
-        scheduler = request.app.state.scheduler
+        # Scheduling is now managed by Prefect — pause/resume via Prefect UI
         return request.app.state.templates.TemplateResponse(
             request,
             "sync/logs.html",
@@ -49,7 +50,7 @@ async def sync_logs(
                 "sync_type": sync_type,
                 "action_filter": action,
                 "status_filter": status,
-                "sync_paused": scheduler.is_sync_paused,
+                "sync_paused": False,
             },
         )
     finally:
@@ -58,21 +59,33 @@ async def sync_logs(
 
 @router.post("/trigger")
 async def trigger_full_sync(request: Request, background_tasks: BackgroundTasks):
-    engine = request.app.state.sync_engine
-    background_tasks.add_task(engine.full_sync)
-    logger.info("Manual full sync triggered by admin")
+    try:
+        await run_deployment("sync-integration/full", timeout=0)  # non-blocking
+        logger.info("Manual full sync triggered via Prefect deployment")
+    except Exception:
+        logger.exception("Failed to trigger full sync via Prefect")
+    return RedirectResponse(url="/admin/sync", status_code=303)
+
+
+@router.post("/trigger-incremental")
+async def trigger_incremental_sync(request: Request):
+    try:
+        await run_deployment("sync-integration/incremental", timeout=0)  # non-blocking
+        logger.info("Manual incremental sync triggered via Prefect deployment")
+    except Exception:
+        logger.exception("Failed to trigger incremental sync via Prefect")
     return RedirectResponse(url="/admin/sync", status_code=303)
 
 
 @router.post("/pause")
 async def pause_sync(request: Request):
-    request.app.state.scheduler.pause_sync()
-    logger.info("Sync paused by admin")
+    # Scheduling is now managed by Prefect — use Prefect UI to pause/resume schedules
+    logger.info("Sync pause requested (scheduling managed by Prefect)")
     return RedirectResponse(url="/admin/sync", status_code=303)
 
 
 @router.post("/resume")
 async def resume_sync(request: Request):
-    request.app.state.scheduler.resume_sync()
-    logger.info("Sync resumed by admin")
+    # Scheduling is now managed by Prefect — use Prefect UI to pause/resume schedules
+    logger.info("Sync resume requested (scheduling managed by Prefect)")
     return RedirectResponse(url="/admin/sync", status_code=303)
