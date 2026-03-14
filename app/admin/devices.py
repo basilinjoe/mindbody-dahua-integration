@@ -52,7 +52,7 @@ async def device_add_submit(
     door_ids: str = Form("0"),
     is_enabled: str = Form(""),
     gate_type: str = Form("all"),
-    enable_integration: str = Form("1"),
+    enable_integration: str = Form(""),
 ):
     db = request.app.state.db_session_factory()
     try:
@@ -108,7 +108,7 @@ async def device_edit_submit(
     door_ids: str = Form("0"),
     is_enabled: str = Form(""),
     gate_type: str = Form("all"),
-    enable_integration: str = Form("1"),
+    enable_integration: str = Form(""),
 ):
     db = request.app.state.db_session_factory()
     try:

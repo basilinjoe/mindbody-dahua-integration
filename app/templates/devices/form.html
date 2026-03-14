@@ -87,7 +87,7 @@
 
     <div class="flex items-center gap-2">
       <input type="checkbox" id="enable_integration" name="enable_integration" value="1"
-        {% if not device or device.enable_integration %}checked{% endif %}
+        {% if device and device.enable_integration %}checked{% endif %}
         class="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900" />
       <div>
         <label for="enable_integration" class="text-sm font-medium text-gray-700">Enable Integration</label>
