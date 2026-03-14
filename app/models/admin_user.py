@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from passlib.hash import bcrypt
+import bcrypt
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,7 +19,7 @@ class AdminUser(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     def set_password(self, raw_password: str) -> None:
-        self.password_hash = bcrypt.hash(raw_password)
+        self.password_hash = bcrypt.hashpw(raw_password.encode(), bcrypt.gensalt()).decode()
 
     def verify_password(self, raw_password: str) -> bool:
-        return bcrypt.verify(raw_password, self.password_hash)
+        return bcrypt.checkpw(raw_password.encode(), self.password_hash.encode())
