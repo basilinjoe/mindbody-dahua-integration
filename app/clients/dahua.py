@@ -153,31 +153,53 @@ class DahuaClient:
 
     @dahua_retry
     async def remove_face_photo(self, user_id: str) -> bool:
-        resp = await self._post_json(
-            "/cgi-bin/FaceInfoManager.cgi?action=remove",
-            {"UserID": user_id},
+        resp = await self._get(
+            "/cgi-bin/FaceInfoManager.cgi",
+            {"action": "remove", "UserID": user_id},
         )
         return resp.status_code == 200
 
-    @dahua_retry
     async def get_face_photo(self, user_id: str) -> str | None:
         """
-        Fetch the enrolled face photo for a user from the device.
-        Returns the raw base64 JPEG string (no data URI prefix), or None if not found.
+        Check whether the user has a face enrolled on the device.
+
+        The Dahua API does not provide an endpoint to download the stored photo
+        (section 12.3.4 doFind returns MD5 hashes only). This method uses the
+        correct 3-step find protocol (startFind → doFind → stopFind) and returns
+        None in all cases — callers should source the photo from local storage.
         """
-        params = {
-            "action": "find",
-            "name": "FaceInfo",
-            "condition.UserID": user_id,
-            "startIndex": "0",
-            "count": "1",
-        }
-        resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
+        # Step 1: start find session
+        resp = await self._get(
+            "/cgi-bin/FaceInfoManager.cgi",
+            {"action": "startFind", "Condition.UserID": user_id},
+        )
         if resp.status_code != 200:
             return None
-        for line in resp.text.splitlines():
-            if "PhotoData" in line and "=" in line:
-                return line.partition("=")[2].strip()
+        try:
+            data = resp.json()
+        except Exception:
+            return None
+
+        token = data.get("Token")
+        total = data.get("Total", 0)
+
+        if not token:
+            return None
+
+        # Step 2: fetch result (MD5 hashes only — no photo data in response)
+        await self._get(
+            "/cgi-bin/FaceInfoManager.cgi",
+            {"action": "doFind", "Token": str(token), "Offset": "0", "Count": "1"},
+        )
+
+        # Step 3: always stop the session
+        await self._get(
+            "/cgi-bin/FaceInfoManager.cgi",
+            {"action": "stopFind", "Token": str(token)},
+        )
+
+        # The device API cannot return photo data — return None regardless
+        _ = total  # face count available if needed by callers in future
         return None
 
     # ---- Record Querying ---------------------------------------------------
@@ -190,7 +212,7 @@ class DahuaClient:
         """
         resp = await self._get(
             "/cgi-bin/recordFinder.cgi",
-            {"action": "find", "name": "AccessControlCardRec", "count": "10000"},
+            {"action": "find", "name": "AccessControlCard", "count": "10000"},
         )
         if resp.status_code != 200:
             logger.error("get_all_users failed on %s: %s", self.device_name, resp.text[:300])
