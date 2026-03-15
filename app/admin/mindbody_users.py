@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import asc, desc
 
 from app.models.mindbody_client import MindBodyClient
+from app.models.mindbody_membership import MindBodyMembership
 from app.sync.mindbody_client_service import (
     get_last_fetched_at,
     refresh_mindbody_clients,
@@ -41,6 +42,7 @@ async def mindbody_user_list(
     filter_active: str = "",
     filter_status: str = "",
     filter_gender: str = "",
+    filter_has_membership: str = "",
 ):
     db = request.app.state.db_session_factory()
     page_size = 50
@@ -60,6 +62,20 @@ async def mindbody_user_list(
             q = q.filter(MindBodyClient.status == filter_status)
         if filter_gender:
             q = q.filter(MindBodyClient.gender == filter_gender)
+        if filter_has_membership == "yes":
+            active_mb_ids = (
+                db.query(MindBodyMembership.mindbody_client_id)
+                .filter(MindBodyMembership.is_active.is_(True))
+                .distinct()
+            )
+            q = q.filter(MindBodyClient.mindbody_id.in_(active_mb_ids))
+        elif filter_has_membership == "no":
+            active_mb_ids = (
+                db.query(MindBodyMembership.mindbody_client_id)
+                .filter(MindBodyMembership.is_active.is_(True))
+                .distinct()
+            )
+            q = q.filter(~MindBodyClient.mindbody_id.in_(active_mb_ids))
 
         sort_col = _SORTABLE.get(sort, MindBodyClient.last_name)
         q = q.order_by(asc(sort_col) if order == "asc" else desc(sort_col))
@@ -100,6 +116,7 @@ async def mindbody_user_list(
                 "filter_active": filter_active,
                 "filter_status": filter_status,
                 "filter_gender": filter_gender,
+                "filter_has_membership": filter_has_membership,
                 "statuses": statuses,
                 "genders": genders,
             },

@@ -124,6 +124,28 @@ class DahuaClient:
         return ok
 
     @dahua_retry
+    async def update_user_validity(
+        self, user_id: str, valid_start: str | None, valid_end: str | None
+    ) -> bool:
+        """Update ValidDateStart / ValidDateEnd for an existing user (access window)."""
+        params: dict[str, str] = {
+            "action": "update",
+            "name": "AccessControlCard",
+            "UserID": user_id,
+        }
+        if valid_start:
+            params["ValidDateStart"] = valid_start
+        if valid_end:
+            params["ValidDateEnd"] = valid_end
+        resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
+        ok = resp.status_code == 200 and "OK" in resp.text
+        if not ok:
+            logger.error(
+                "update_user_validity %s failed on %s: %s", user_id, self.device_name, resp.text
+            )
+        return ok
+
+    @dahua_retry
     async def remove_user(self, user_id: str) -> bool:
         """Fully remove a user and their face data from the device."""
         params = {

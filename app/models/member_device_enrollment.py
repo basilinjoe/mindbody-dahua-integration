@@ -28,6 +28,9 @@ class MemberDeviceEnrollment(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     enrolled_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     deactivated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Access window currently set on the Dahua device (format: "YYYY-MM-DD HH:MM:SS")
+    valid_start: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    valid_end: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     def __repr__(self) -> str:
         return f"<MemberDeviceEnrollment member={self.synced_member_id} device={self.device_id} active={self.is_active}>"
