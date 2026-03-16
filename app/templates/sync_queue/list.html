@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Sync Queue{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-2 h-full">
+  <!-- Compact top bar -->
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <h1 class="text-sm font-semibold text-gray-900">Dahua Sync Queue</h1>
+      <span class="text-xs text-gray-400">{{ total }} item{{ 's' if total != 1 else '' }}</span>
+    </div>
+  </div>
+
+  <!-- Table card -->
+  <div class="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col min-h-0 flex-1">
+
+    <!-- Toolbar -->
+    <div class="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center gap-2 flex-shrink-0">
+      <form method="GET" action="/admin/sync-queue" class="flex items-center gap-2 flex-wrap w-full">
+        <input type="hidden" name="offset" value="0" />
+        <!-- Status pill buttons -->
+        <div class="flex items-center gap-1">
+          <button type="submit" name="status" value=""
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if not status_filter %}bg-gray-900 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">All</button>
+          <button type="submit" name="status" value="pending"
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if status_filter == 'pending' %}bg-yellow-600 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">Pending</button>
+          <button type="submit" name="status" value="success"
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if status_filter == 'success' %}bg-green-700 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">Success</button>
+          <button type="submit" name="status" value="failed"
+            class="px-2 py-0.5 rounded-full text-xs font-medium transition {% if status_filter == 'failed' %}bg-red-700 text-white{% else %}bg-gray-100 text-gray-600 hover:bg-gray-200{% endif %}">Failed</button>
+        </div>
+        <div class="w-px h-4 bg-gray-200"></div>
+        <!-- Action select -->
+        <select name="action" onchange="this.form.submit()"
+          class="px-2.5 py-0.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+          <option value="">All actions</option>
+          <option value="enroll" {% if action_filter == 'enroll' %}selected{% endif %}>Enroll</option>
+          <option value="deactivate" {% if action_filter == 'deactivate' %}selected{% endif %}>Deactivate</option>
+          <option value="reactivate" {% if action_filter == 'reactivate' %}selected{% endif %}>Reactivate</option>
+          <option value="update_window" {% if action_filter == 'update_window' %}selected{% endif %}>Update Window</option>
+        </select>
+        {% if run_id_filter or action_filter or status_filter %}
+        <a href="/admin/sync-queue"
+          class="px-2.5 py-0.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-100 transition">Clear</a>
+        {% endif %}
+        <!-- Run ID search (right-aligned) -->
+        <div class="flex items-center gap-1 ml-auto">
+          <input type="text" name="run_id" value="{{ run_id_filter }}" placeholder="Filter by run ID…"
+            class="px-2.5 py-1 border border-gray-300 rounded-lg text-xs w-52 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 outline-none" />
+          <button type="submit" class="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-lg hover:bg-gray-200 transition">Search</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Scrollable table -->
+    <div class="overflow-auto flex-1">
+      <table class="w-full text-xs whitespace-nowrap">
+        <thead class="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
+          <tr>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">ID</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Run ID</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Client ID</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Device</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Action</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Status</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Created</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Processed</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Error</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {% for item in items %}
+          <tr class="hover:bg-gray-50 transition">
+            <td class="px-3 py-1.5 text-gray-500 font-mono">{{ item.id }}</td>
+            <td class="px-3 py-1.5 font-mono text-gray-600" title="{{ item.run_id }}">{{ item.run_id[:12] }}…</td>
+            <td class="px-3 py-1.5 text-gray-800">{{ item.mindbody_client_id }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ item.device_id }}</td>
+            <td class="px-3 py-1.5">
+              <span class="px-1.5 py-0.5 rounded text-xs font-medium
+                {% if item.action == 'enroll' %}bg-blue-50 text-blue-700
+                {% elif item.action == 'deactivate' %}bg-red-50 text-red-700
+                {% elif item.action == 'reactivate' %}bg-green-50 text-green-700
+                {% elif item.action == 'update_window' %}bg-purple-50 text-purple-700
+                {% else %}bg-gray-100 text-gray-600{% endif %}">
+                {{ item.action }}
+              </span>
+            </td>
+            <td class="px-3 py-1.5">
+              {% if item.status == 'success' %}
+              <span class="inline-flex items-center gap-1 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>success</span>
+              {% elif item.status == 'failed' %}
+              <span class="inline-flex items-center gap-1 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>failed</span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 text-yellow-700"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>pending</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-1.5 text-gray-500">{{ item.created_at.strftime('%b %d %H:%M') if item.created_at else '—' }}</td>
+            <td class="px-3 py-1.5 text-gray-500">{{ item.processed_at.strftime('%b %d %H:%M') if item.processed_at else '—' }}</td>
+            <td class="px-3 py-1.5 text-red-600 max-w-xs truncate" title="{{ item.error_message or '' }}">
+              {{ item.error_message or '' }}
+            </td>
+          </tr>
+          {% endfor %}
+          {% if not items %}
+          <tr>
+            <td colspan="9" class="px-3 py-10 text-center text-gray-400">No queue items found</td>
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total > page_size %}
+    <div class="flex items-center justify-between px-4 py-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+      <p class="text-xs text-gray-500">
+        Showing {{ offset + 1 }}–{{ [offset + page_size, total] | min }} of {{ total }}
+      </p>
+      <div class="flex gap-1">
+        {% if offset > 0 %}
+        <a href="/admin/sync-queue?offset={{ offset - page_size }}&run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}"
+          class="px-2.5 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50">Previous</a>
+        {% endif %}
+        {% if offset + page_size < total %}
+        <a href="/admin/sync-queue?offset={{ offset + page_size }}&run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}"
+          class="px-2.5 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function() {
+  const main = document.querySelector('main');
+  if (main) {
+    main.style.overflow = 'hidden';
+    main.style.display = 'flex';
+    main.style.flexDirection = 'column';
+    const wrapper = main.firstElementChild;
+    if (wrapper) {
+      wrapper.style.flex = '1';
+      wrapper.style.minHeight = '0';
+      wrapper.style.padding = '1rem';
+      wrapper.style.display = 'flex';
+      wrapper.style.flexDirection = 'column';
+    }
+  }
+})();
+</script>
+{% endblock %}
