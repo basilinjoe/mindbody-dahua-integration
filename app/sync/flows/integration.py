@@ -67,7 +67,7 @@ async def sync_integration_flow(
 
     if not members:
         flow_logger.info("No members to process")
-        await Variable.set("last_sync_at", run_started_at.isoformat())
+        await Variable.set("last_sync_at", run_started_at.isoformat(), overwrite=True)
         return
 
     # 4. Classify by gender
@@ -111,7 +111,7 @@ async def sync_integration_flow(
     push_stats = await sync_dahua_push_flow(run_id=run_id, photo_max_kb=photo_max_kb)
 
     # 10. Save last sync timestamp
-    await Variable.set("last_sync_at", run_started_at.isoformat())
+    await Variable.set("last_sync_at", run_started_at.isoformat(), overwrite=True)
 
     # 11. Publish artifact
     await create_table_artifact(
