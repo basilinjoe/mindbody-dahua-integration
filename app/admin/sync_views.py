@@ -67,15 +67,6 @@ async def trigger_full_sync(request: Request, background_tasks: BackgroundTasks)
     return RedirectResponse(url="/admin/sync", status_code=303)
 
 
-@router.post("/trigger-incremental")
-async def trigger_incremental_sync(request: Request):
-    try:
-        await run_deployment("sync-integration/incremental", timeout=0)  # non-blocking
-        logger.info("Manual incremental sync triggered via Prefect deployment")
-    except Exception:
-        logger.exception("Failed to trigger incremental sync via Prefect")
-    return RedirectResponse(url="/admin/sync", status_code=303)
-
 
 @router.post("/pause")
 async def pause_sync(request: Request):

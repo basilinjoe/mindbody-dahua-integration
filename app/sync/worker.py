@@ -7,9 +7,8 @@ Start with:
 On startup:
  1. Registers MindBodyCredentials block type with Prefect server
  2. Creates per-device concurrency limits (max 2 concurrent calls per device)
- 3. Starts prefect serve() with 4 deployments:
-    - sync-integration/incremental  (every N minutes, incremental fetch)
-    - sync-integration/full         (daily 2 AM, full reconciliation)
+ 3. Starts prefect serve() with 3 deployments:
+    - sync-integration/full         (every N minutes, full reconciliation)
     - sync-member/default           (webhook/manual trigger)
     - device-health/scheduled       (every M minutes, health check)
 """
@@ -153,19 +152,11 @@ async def main() -> None:
             tags=["webhook"],
         ),
 
-        # Incremental sync — every N minutes, only modified members
-        await sync_integration_flow.ato_deployment(
-            name="incremental",
-            interval=timedelta(minutes=interval),
-            parameters={"force_full": False, "sync_type": "scheduled"},
-            tags=["integration", "incremental"],
-        ),
-
-        # Full reconciliation — daily 2 AM, catches lapsed memberships
+        # Full sync — every N minutes
         await sync_integration_flow.ato_deployment(
             name="full",
-            cron="0 2 * * *",
-            parameters={"force_full": True, "sync_type": "scheduled"},
+            interval=timedelta(minutes=interval),
+            parameters={"sync_type": "scheduled"},
             tags=["integration", "full"],
         ),
 

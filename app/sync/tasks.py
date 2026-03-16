@@ -594,6 +594,57 @@ async def load_membership_windows(
     return result_map
 
 
+@task(name="load-active-members-from-db", tags=["db"])
+async def load_active_members_from_db() -> list[dict]:
+    """
+    Return all MindBody clients that are active AND have at least one active membership
+    in the local DB. Shaped as API-compatible dicts (Id, FirstName, LastName, Gender,
+    PhotoUrl, Email) so they slot directly into the existing enroll snapshot format.
+    """
+    from sqlalchemy import exists as sa_exists
+
+    stmt = (
+        select(MindBodyClientModel)
+        .where(MindBodyClientModel.active.is_(True))
+        .where(
+            sa_exists(
+                select(MindBodyMembership.id)
+                .where(MindBodyMembership.mindbody_client_id == MindBodyClientModel.mindbody_id)
+                .where(MindBodyMembership.is_active.is_(True))
+                .correlate(MindBodyClientModel)
+            )
+        )
+    )
+    async with _get_async_session_factory()() as db:
+        result = await db.execute(stmt)
+        rows = list(result.scalars().all())
+    return [
+        {
+            "Id": row.mindbody_id,
+            "FirstName": row.first_name,
+            "LastName": row.last_name,
+            "Gender": row.gender,
+            "PhotoUrl": row.photo_url,
+            "Email": row.email,
+        }
+        for row in rows
+    ]
+
+
+@task(name="fetch-dahua-users-for-device", retries=2, retry_delay_seconds=15, tags=["dahua"])
+async def fetch_dahua_users_for_device(device_id: int) -> list[dict]:
+    """
+    Fetch all AccessControlCard records from a Dahua device.
+    Returns list of dicts with UserID, CardStatus, ValidDateStart, ValidDateEnd, CardName, etc.
+    UserID on the device matches mindbody_id for integer client IDs.
+    """
+    client, _ = await _get_dahua_client(device_id)
+    try:
+        return await client.get_all_users()
+    finally:
+        await client.close()
+
+
 @task(name="update-window-on-device", retries=2, retry_delay_seconds=5, tags=["dahua"])
 async def update_window_on_device(
     device_id: int,

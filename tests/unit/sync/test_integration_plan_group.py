@@ -1,96 +1,130 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
-from unittest.mock import MagicMock
 
-import pytest
-
-from app.sync.flows import integration as integration_mod
+import app.sync.flows.integration as integration_mod
 
 
-@dataclass
-class _Enrollment:
-    id: int
-    dahua_user_id: str
-    is_active: bool
-    valid_end: str | None
+def test_plan_device_operations_creates_all_action_types() -> None:
+    """
+    Given:
+      - active member 101 (already on device, active, window unchanged)  → update_window or no-op
+      - active member 102 (already on device, FROZEN)                    → reactivate
+      - active member 104 (NOT on device yet)                            → enroll
+      - Dahua user  103 (on device, active, NOT in active set)           → deactivate
 
-
-@pytest.mark.asyncio
-async def test_plan_group_creates_all_operation_types(monkeypatch: pytest.MonkeyPatch) -> None:
-    group_members = [
-        {"Id": "101", "FirstName": "Alex", "LastName": "One", "Gender": "male", "PhotoUrl": "https://img/101", "Email": "101@example.com"},
-        {"Id": "102", "FirstName": "Blair", "LastName": "Two", "Gender": "male", "PhotoUrl": "https://img/102", "Email": "102@example.com"},
-        {"Id": "104", "FirstName": "Casey", "LastName": "Four", "Gender": "male", "PhotoUrl": "https://img/104", "Email": "104@example.com"},
-    ]
-    active_ids = {"101", "102", "104"}
-    device_ids = [7]
-
-    enrollments = {
-        "101": _Enrollment(id=501, dahua_user_id="101", is_active=True, valid_end="2026-03-31 23:59:59"),
-        "102": _Enrollment(id=502, dahua_user_id="102", is_active=False, valid_end="2026-12-31 23:59:59"),
-        "103": _Enrollment(id=503, dahua_user_id="103", is_active=True, valid_end="2026-10-10 23:59:59"),
+    Expected: one item of each action type.
+    """
+    active_member_ids = {"101", "102", "104"}
+    member_map = {
+        "101": {"Id": "101", "FirstName": "Alex", "LastName": "One", "Gender": "male",
+                "PhotoUrl": "https://img/101", "Email": "101@x.com"},
+        "102": {"Id": "102", "FirstName": "Blair", "LastName": "Two", "Gender": "male",
+                "PhotoUrl": "https://img/102", "Email": "102@x.com"},
+        "104": {"Id": "104", "FirstName": "Casey", "LastName": "Four", "Gender": "male",
+                "PhotoUrl": "https://img/104", "Email": "104@x.com"},
     }
+    # Dahua device state:
+    #   101 → CardStatus=0 (active), ValidDateEnd="2026-03-31 23:59:59"
+    #   102 → CardStatus=4 (frozen)
+    #   103 → CardStatus=0 (active) — no longer in active member set
+    dahua_users = [
+        {"UserID": "101", "CardStatus": "0", "ValidDateStart": "2026-01-01 00:00:00",
+         "ValidDateEnd": "2026-03-31 23:59:59"},
+        {"UserID": "102", "CardStatus": "4", "ValidDateStart": "", "ValidDateEnd": ""},
+        {"UserID": "103", "CardStatus": "0", "ValidDateStart": "", "ValidDateEnd": ""},
+    ]
     membership_windows = {
-        "101": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
+        "101": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),  # expiry changed → update_window
         "102": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
         "104": ("2026-02-01T00:00:00Z", "2026-11-30T23:59:59Z"),
     }
 
-    async def fake_load_enrollments_for_device(device_id: int):  # noqa: ANN202
-        assert device_id == 7
-        return enrollments
-
-    async def fake_load_membership_windows(client_ids: list[str]):  # noqa: ANN202
-        assert set(client_ids) == {"101", "102", "104"}
-        return membership_windows
-
-    monkeypatch.setattr(integration_mod, "load_enrollments_for_device", fake_load_enrollments_for_device)
-    monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
-
-    logger = MagicMock()
-    items = await integration_mod._plan_group(group_members, device_ids, active_ids, logger)
-
-    by_action = {item["action"]: item for item in items}
-    assert set(by_action.keys()) == {"enroll", "deactivate", "reactivate", "update_window"}
-
-    enroll_item = by_action["enroll"]
-    enroll_snapshot = json.loads(enroll_item["member_snapshot"])
-    assert enroll_item["device_id"] == 7
-    assert enroll_item["mindbody_client_id"] == "104"
-    assert enroll_snapshot["valid_start"] == "2026-02-01 00:00:00"
-    assert enroll_snapshot["valid_end"] == "2026-11-30 23:59:59"
-
-    deactivate_item = by_action["deactivate"]
-    assert deactivate_item["dahua_user_id"] == "103"
-    assert deactivate_item["enrollment_id"] == 503
-
-    reactivate_item = by_action["reactivate"]
-    assert reactivate_item["dahua_user_id"] == "102"
-    assert reactivate_item["enrollment_id"] == 502
-
-    update_item = by_action["update_window"]
-    update_snapshot = json.loads(update_item["member_snapshot"])
-    assert update_item["dahua_user_id"] == "101"
-    assert update_item["enrollment_id"] == 501
-    assert update_snapshot["valid_start"] == "2026-01-01 00:00:00"
-    assert update_snapshot["valid_end"] == "2026-12-31 23:59:59"
-
-
-@pytest.mark.asyncio
-async def test_plan_group_returns_empty_when_no_devices(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def should_not_run(*_args, **_kwargs):  # noqa: ANN002, ANN003, ANN202
-        raise AssertionError("loader should not run when device_ids is empty")
-
-    monkeypatch.setattr(integration_mod, "load_enrollments_for_device", should_not_run)
-    monkeypatch.setattr(integration_mod, "load_membership_windows", should_not_run)
-
-    items = await integration_mod._plan_group(
-        group_members=[{"Id": "1"}],
-        device_ids=[],
-        active_ids={"1"},
-        flow_logger=MagicMock(),
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=active_member_ids,
+        member_map=member_map,
+        dahua_users=dahua_users,
+        membership_windows=membership_windows,
     )
 
+    by_action = {item["action"]: item for item in items}
+    assert set(by_action.keys()) == {"enroll", "deactivate", "reactivate", "update_window"}, (
+        f"Expected all 4 action types, got: {set(by_action.keys())}"
+    )
+
+    # enroll: member 104 not on device
+    enroll = by_action["enroll"]
+    assert enroll["device_id"] == 7
+    assert enroll["mindbody_client_id"] == "104"
+    snapshot = json.loads(enroll["member_snapshot"])
+    assert snapshot["valid_start"] == "2026-02-01 00:00:00"
+    assert snapshot["valid_end"] == "2026-11-30 23:59:59"
+
+    # deactivate: user 103 on device but not in active set
+    deactivate = by_action["deactivate"]
+    assert deactivate["dahua_user_id"] == "103"
+    assert deactivate["mindbody_client_id"] == "103"
+
+    # reactivate: member 102 frozen on device but has active membership
+    reactivate = by_action["reactivate"]
+    assert reactivate["dahua_user_id"] == "102"
+    assert reactivate["mindbody_client_id"] == "102"
+
+    # update_window: member 101 active but expiry changed (was 2026-03-31, now 2026-12-31)
+    update = by_action["update_window"]
+    assert update["dahua_user_id"] == "101"
+    assert update["mindbody_client_id"] == "101"
+    window = json.loads(update["member_snapshot"])
+    assert window["valid_end"] == "2026-12-31 23:59:59"
+
+
+def test_plan_device_operations_returns_empty_when_no_active_members() -> None:
+    """No active members and empty Dahua device → no operations."""
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=set(),
+        member_map={},
+        dahua_users=[],
+        membership_windows={},
+    )
     assert items == []
+
+
+def test_plan_device_operations_no_op_when_already_in_sync() -> None:
+    """Active member already enrolled with correct window → no operations."""
+    active_member_ids = {"101"}
+    member_map = {
+        "101": {"Id": "101", "FirstName": "A", "LastName": "B", "Gender": "male",
+                "PhotoUrl": None, "Email": None},
+    }
+    dahua_users = [
+        {"UserID": "101", "CardStatus": "0",
+         "ValidDateStart": "2026-01-01 00:00:00",
+         "ValidDateEnd": "2026-12-31 23:59:59"},
+    ]
+    membership_windows = {
+        "101": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
+    }
+
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=active_member_ids,
+        member_map=member_map,
+        dahua_users=dahua_users,
+        membership_windows=membership_windows,
+    )
+    assert items == [], f"Expected no operations but got: {items}"
+
+
+def test_plan_device_operations_skips_already_frozen_users() -> None:
+    """Users already frozen on device (CardStatus=4) not in active set → skip deactivate."""
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=set(),
+        member_map={},
+        dahua_users=[{"UserID": "999", "CardStatus": "4", "ValidDateEnd": ""}],
+        membership_windows={},
+    )
+    # Should NOT generate a deactivate — already frozen
+    assert all(i["action"] != "deactivate" for i in items)
