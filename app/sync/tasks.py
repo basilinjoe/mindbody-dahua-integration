@@ -376,7 +376,7 @@ async def upsert_mindbody_users_batch(members: list[dict]) -> int:
     Async upsert of MindBody user details into the mindbody_clients table.
     Returns count of rows processed.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     processed = 0
     async with _get_async_session_factory()() as db:
         for m in members:
