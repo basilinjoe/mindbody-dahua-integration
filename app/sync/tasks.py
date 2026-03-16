@@ -384,7 +384,7 @@ async def upsert_mindbody_users_batch(members: list[dict]) -> int:
             if not mid:
                 continue
             row = {
-                "unique_id": m.get("UniqueId"),
+                "unique_id": str(m["UniqueId"]) if m.get("UniqueId") is not None else None,
                 "first_name": m.get("FirstName", ""),
                 "last_name": m.get("LastName", ""),
                 "email": m.get("Email"),
