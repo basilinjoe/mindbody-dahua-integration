@@ -57,6 +57,10 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-changeme}@postgres:5432/app_db
       PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_LOCAL_STORAGE_PATH: /app/prefect-results
+      PREFECT_RESULTS_PERSIST_BY_DEFAULT: "true"
+    volumes:
+      - prefect_results:/app/prefect-results
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,3 +69,4 @@ services:
 
 volumes:
   postgres_data:
+  prefect_results:

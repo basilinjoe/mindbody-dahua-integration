@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
@@ -126,7 +127,14 @@ async def check_membership(client_id: str) -> bool:
         await client.close()
 
 
-@task(name="get-active-member-ids", retries=2, retry_delay_seconds=10, tags=["mindbody"])
+@task(
+    name="get-active-member-ids",
+    retries=2,
+    retry_delay_seconds=10,
+    cache_policy=INPUTS,
+    cache_expiration=timedelta(minutes=5),
+    tags=["mindbody"],
+)
 async def get_active_member_ids(client_ids: list[str]) -> set[str]:
     """Return subset of client_ids whose membership is currently active."""
     creds = await MindBodyCredentials.load("production")
@@ -347,7 +355,14 @@ async def load_all_devices() -> list[DahuaDevice]:
 
 # ── MindBody user + membership persistence tasks ────────────────────────────────
 
-@task(name="fetch-all-memberships", retries=2, retry_delay_seconds=15, tags=["mindbody"])
+@task(
+    name="fetch-all-memberships",
+    retries=2,
+    retry_delay_seconds=15,
+    cache_policy=INPUTS,
+    cache_expiration=timedelta(minutes=5),
+    tags=["mindbody"],
+)
 async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
     """
     Fetch active memberships for all given MindBody client IDs.
@@ -508,14 +523,15 @@ async def write_sync_queue_batch(run_id: str, items: list[dict]) -> int:
 @task(name="load-pending-queue-items", tags=["db"])
 async def load_pending_queue_items(run_id: str) -> list[DahuaSyncQueue]:
     """
-    Load all pending queue items for a given run_id.
+    Load all actionable queue items for a given run_id.
+    Includes both 'pending' (not yet attempted) and 'failed' (eligible for retry).
     Returns detached ORM objects (session is closed after load).
     """
     async with _get_async_session_factory()() as db:
         result = await db.execute(
             select(DahuaSyncQueue)
             .where(DahuaSyncQueue.run_id == run_id)
-            .where(DahuaSyncQueue.status == "pending")
+            .where(DahuaSyncQueue.status.in_(["pending", "failed"]))
         )
         items = list(result.scalars().all())
         # Expunge so objects can be used outside the session
