@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -9,16 +10,17 @@ from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
 from prefect.variables import Variable
 
-from app.sync.flows.dahua_push import sync_dahua_push_flow
-from app.sync.flows.mindbody_memberships import sync_mindbody_memberships_flow
-from app.sync.flows.mindbody_users import sync_mindbody_users_flow
+from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
     _format_dahua_date,
+    fetch_all_memberships,
     fetch_members,
     get_active_member_ids,
     load_device_ids_by_gate_type,
     load_enrollments_for_device,
     load_membership_windows,
+    upsert_mindbody_memberships_batch,
+    upsert_mindbody_users_batch,
     write_sync_queue_batch,
 )
 
@@ -57,11 +59,7 @@ async def sync_integration_flow(
         modified_after,
     )
 
-    # 2. Persist user + membership details to DB (subflows)
-    await sync_mindbody_users_flow(modified_after=modified_after)
-    await sync_mindbody_memberships_flow(modified_after=modified_after)
-
-    # 3. Fetch members
+    # 2. Fetch members (shared across all steps)
     members = await fetch_members(modified_after=modified_after)
     flow_logger.info("Fetched %d members from MindBody", len(members))
 
@@ -70,29 +68,43 @@ async def sync_integration_flow(
         await Variable.set("last_sync_at", run_started_at.isoformat(), overwrite=True)
         return
 
-    # 4. Classify by gender
+    # 3. Derive client IDs once (reused for upserts, membership fetch, and planning)
+    client_ids = [str(m["Id"]) for m in members if m.get("Id")]
+
+    # 4. Persist users + fetch memberships in parallel (no dependency between them)
+    memberships_by_client: dict = {}
+    if client_ids:
+        _, memberships_by_client = await asyncio.gather(
+            upsert_mindbody_users_batch(members),
+            fetch_all_memberships(client_ids),
+        )
+        await upsert_mindbody_memberships_batch(memberships_by_client)
+    else:
+        await upsert_mindbody_users_batch(members)
+
+    # 5. Classify by gender + load devices + check active memberships in parallel
     male_members = [m for m in members if (m.get("Gender") or "").lower() == "male"]
     female_members = [m for m in members if (m.get("Gender") or "").lower() == "female"]
     flow_logger.info("Classified: %d male, %d female", len(male_members), len(female_members))
 
-    # 5. Load devices by gate_type
-    male_device_ids = await load_device_ids_by_gate_type("male")
-    female_device_ids = await load_device_ids_by_gate_type("female")
+    (male_device_ids, female_device_ids), active_ids = await asyncio.gather(
+        asyncio.gather(
+            load_device_ids_by_gate_type("male"),
+            load_device_ids_by_gate_type("female"),
+        ),
+        get_active_member_ids(client_ids),
+    )
     flow_logger.info(
-        "Devices: %d male gates, %d female gates",
-        len(male_device_ids),
-        len(female_device_ids),
+        "Devices: %d male gates, %d female gates | %d / %d members active",
+        len(male_device_ids), len(female_device_ids), len(active_ids), len(client_ids),
     )
 
-    # 6. Check active membership for all fetched member IDs
-    all_ids = [str(m.get("Id", "")) for m in members if m.get("Id")]
-    active_ids = await get_active_member_ids(all_ids)
-    flow_logger.info("%d / %d members have active membership", len(active_ids), len(all_ids))
-
-    # 7. Plan operations (no Dahua calls yet)
+    # 6. Plan operations for both groups in parallel
     run_id = str(uuid4())
-    male_items = await _plan_group(male_members, male_device_ids, active_ids, flow_logger)
-    female_items = await _plan_group(female_members, female_device_ids, active_ids, flow_logger)
+    male_items, female_items = await asyncio.gather(
+        _plan_group(male_members, male_device_ids, active_ids, flow_logger),
+        _plan_group(female_members, female_device_ids, active_ids, flow_logger),
+    )
     all_items = male_items + female_items
 
     flow_logger.info(
@@ -108,7 +120,7 @@ async def sync_integration_flow(
     await write_sync_queue_batch(run_id, all_items)
 
     # 9. Execute the plan against Dahua devices
-    push_stats = await sync_dahua_push_flow(run_id=run_id, photo_max_kb=photo_max_kb)
+    push_stats = await run_dahua_push(run_id, photo_max_kb, flow_logger)
 
     # 10. Save last sync timestamp
     await Variable.set("last_sync_at", run_started_at.isoformat(), overwrite=True)
@@ -149,14 +161,22 @@ async def _plan_group(
     active_group_ids = {str(m.get("Id", "")) for m in group_members if str(m.get("Id", "")) in active_ids}
     member_map = {str(m.get("Id", "")): m for m in group_members}
 
-    # Load membership windows for all group members in a single DB query
+    # Load membership windows + all device enrollments in parallel
     all_client_ids = list({str(m.get("Id", "")) for m in group_members if m.get("Id")})
-    membership_windows = await load_membership_windows(all_client_ids)
+    enrollment_results: list = await asyncio.gather(
+        load_membership_windows(all_client_ids),
+        *[load_enrollments_for_device(device_id) for device_id in device_ids],
+    )
+    membership_windows = enrollment_results[0]
+    device_enrollment_map = {
+        device_id: enrollment_results[i + 1]
+        for i, device_id in enumerate(device_ids)
+    }
 
     items: list[dict] = []
 
     for device_id in device_ids:
-        device_enrollments = await load_enrollments_for_device(device_id)
+        device_enrollments = device_enrollment_map[device_id]
 
         to_enroll = [member_map[cid] for cid in active_group_ids if cid not in device_enrollments]
         to_deactivate = [

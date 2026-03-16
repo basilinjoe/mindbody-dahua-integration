@@ -21,23 +21,20 @@ from app.sync.tasks import (
 logger = logging.getLogger(__name__)
 
 
-@flow(name="sync-dahua-push", log_prints=True)
-async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
+async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
     """
-    Execute all pending Dahua operations for a given run_id.
-
-    Reads from dahua_sync_queue, dispatches enroll/deactivate/reactivate tasks,
-    and marks each item success or failed.
-
-    Returns stats dict: {enrolled, deactivated, reactivated, failed}.
+    Core push logic — can be called directly from another flow to avoid
+    Prefect subflow tracking (which requires matching client/server versions).
     """
-    flow_logger = get_run_logger()
     flow_logger.info("Dahua push started (run_id=%s)", run_id)
 
-    items = await load_pending_queue_items(run_id)
+    items, push_enabled_raw = await asyncio.gather(
+        load_pending_queue_items(run_id),
+        Variable.get("dahua_push_enabled", default="true"),
+    )
     flow_logger.info("Loaded %d pending queue items", len(items))
 
-    push_enabled = (await Variable.get("dahua_push_enabled", default="true")).lower().strip()
+    push_enabled = push_enabled_raw.lower().strip()
     if push_enabled != "true":
         flow_logger.warning(
             "Dahua push is DISABLED (dahua_push_enabled=%r) — skipping all device operations",
@@ -47,7 +44,7 @@ async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
 
     if not items:
         flow_logger.info("No pending items — nothing to push")
-        return {"enrolled": 0, "deactivated": 0, "reactivated": 0, "failed": 0}
+        return {"enrolled": 0, "deactivated": 0, "reactivated": 0, "window_updated": 0, "failed": 0}
 
     stats = {"enrolled": 0, "deactivated": 0, "reactivated": 0, "window_updated": 0, "failed": 0}
     _stat_key = {
@@ -57,7 +54,6 @@ async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
         "update_window": "window_updated",
     }
 
-    # Process each item and mark success/failure
     async def _execute(item):
         try:
             if item.action == "enroll":
@@ -124,3 +120,9 @@ async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
     )
 
     return stats
+
+
+@flow(name="sync-dahua-push", log_prints=True)
+async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
+    """Standalone flow wrapper — delegates to run_dahua_push."""
+    return await run_dahua_push(run_id, photo_max_kb, get_run_logger())
