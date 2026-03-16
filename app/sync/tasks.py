@@ -356,18 +356,22 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
     """
     creds = await MindBodyCredentials.load("production")
     client = MindBodyClient(settings=_settings_from_creds(creds))
-    result: dict[str, list[dict]] = {}
-    try:
-        for cid in client_ids:
+    sem = asyncio.Semaphore(10)
+
+    async def _fetch_one(cid: str) -> tuple[str, list[dict]]:
+        async with sem:
             try:
                 memberships = await client.get_active_memberships(cid)
-                result[cid] = memberships
+                return cid, memberships
             except Exception:
                 logger.warning("Could not fetch memberships for client %s", cid)
-                result[cid] = []
+                return cid, []
+
+    try:
+        pairs = await asyncio.gather(*[_fetch_one(cid) for cid in client_ids])
     finally:
         await client.close()
-    return result
+    return dict(pairs)
 
 
 @task(name="upsert-mindbody-users-batch", tags=["db"])
@@ -427,7 +431,8 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
     """
     from sqlalchemy import delete as sa_delete
 
-    now = datetime.now(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    now = now_utc.replace(tzinfo=None)  # naive UTC for TIMESTAMP WITHOUT TIME ZONE columns
     total_inserted = 0
     async with _get_async_session_factory()() as db:
         for client_id, memberships in memberships_by_client.items():
@@ -443,7 +448,7 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
                 if exp_str:
                     try:
                         exp_dt = datetime.fromisoformat(exp_str.replace("Z", "+00:00"))
-                        is_active = exp_dt > now
+                        is_active = exp_dt > now_utc
                     except (ValueError, TypeError):
                         pass
                 db.add(
