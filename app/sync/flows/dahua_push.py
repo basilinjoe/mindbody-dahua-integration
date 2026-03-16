@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
+from prefect.variables import Variable
 
 from app.sync.tasks import (
     deactivate_on_device,
@@ -35,6 +36,14 @@ async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
 
     items = await load_pending_queue_items(run_id)
     flow_logger.info("Loaded %d pending queue items", len(items))
+
+    push_enabled = (await Variable.get("dahua_push_enabled", default="true")).lower().strip()
+    if push_enabled != "true":
+        flow_logger.warning(
+            "Dahua push is DISABLED (dahua_push_enabled=%r) — skipping all device operations",
+            push_enabled,
+        )
+        return {"enrolled": 0, "deactivated": 0, "reactivated": 0, "window_updated": 0, "failed": 0, "skipped": len(items)}
 
     if not items:
         flow_logger.info("No pending items — nothing to push")

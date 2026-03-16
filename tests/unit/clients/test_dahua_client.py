@@ -86,6 +86,59 @@ async def test_update_and_remove_user_status_semantics(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_update_user_validity_builds_expected_params(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = DahuaClient("127.0.0.1")
+    captured: dict = {}
+
+    async def fake_get(path: str, params=None):  # noqa: ANN001, ANN202
+        captured["path"] = path
+        captured["params"] = params
+        return DummyResponse(200, "OK")
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    try:
+        ok = await client.update_user_validity(
+            user_id="300",
+            valid_start="2026-01-01 00:00:00",
+            valid_end="2026-12-31 23:59:59",
+        )
+    finally:
+        await client.close()
+
+    assert ok is True
+    assert captured["path"] == "/cgi-bin/recordUpdater.cgi"
+    assert captured["params"]["action"] == "update"
+    assert captured["params"]["name"] == "AccessControlCard"
+    assert captured["params"]["UserID"] == "300"
+    assert captured["params"]["ValidDateStart"] == "2026-01-01 00:00:00"
+    assert captured["params"]["ValidDateEnd"] == "2026-12-31 23:59:59"
+
+
+@pytest.mark.asyncio
+async def test_update_user_validity_omits_empty_dates_and_propagates_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = DahuaClient("127.0.0.1")
+    captured: dict = {}
+
+    async def fake_get(path: str, params=None):  # noqa: ANN001, ANN202
+        captured["path"] = path
+        captured["params"] = params
+        return DummyResponse(500, "ERR")
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    try:
+        ok = await client.update_user_validity(user_id="301", valid_start=None, valid_end=None)
+    finally:
+        await client.close()
+
+    assert ok is False
+    assert captured["path"] == "/cgi-bin/recordUpdater.cgi"
+    assert "ValidDateStart" not in captured["params"]
+    assert "ValidDateEnd" not in captured["params"]
+
+
+@pytest.mark.asyncio
 async def test_parse_record_finder_response_and_get_all_users(monkeypatch: pytest.MonkeyPatch) -> None:
     client = DahuaClient("127.0.0.1")
     payload = (
