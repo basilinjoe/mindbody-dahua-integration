@@ -28,13 +28,11 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
     """
     flow_logger.info("Dahua push started (run_id=%s)", run_id)
 
-    items, push_enabled_raw = await asyncio.gather(
-        load_pending_queue_items(run_id),
-        Variable.get("dahua_push_enabled", default="true"),
-    )
+    items = await load_pending_queue_items(run_id)
+    push_enabled_raw = await Variable.aget("dahua_push_enabled", default="true")
     flow_logger.info("Loaded %d pending queue items", len(items))
 
-    push_enabled = push_enabled_raw.lower().strip()
+    push_enabled = str(push_enabled_raw).lower().strip()
     if push_enabled != "true":
         flow_logger.warning(
             "Dahua push is DISABLED (dahua_push_enabled=%r) — skipping all device operations",
@@ -97,10 +95,10 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
     results = await asyncio.gather(*[_execute(item) for item in items], return_exceptions=True)
 
     for res in results:
-        if isinstance(res, Exception):
+        if isinstance(res, BaseException):
             stats["failed"] += 1
         else:
-            action, err = res
+            action, err = res  # type: ignore[misc]
             if err is None:
                 stats[_stat_key.get(action, "failed")] += 1
             else:
@@ -113,7 +111,7 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
     )
 
     run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
-    await create_table_artifact(
+    await create_table_artifact(  # type: ignore[misc]
         key="dahua-push-results",
         table=[{"metric": k, "count": v} for k, v in stats.items()],
         description=f"## Dahua Push — {run_ts} UTC  \nrun_id: `{run_id}`",
