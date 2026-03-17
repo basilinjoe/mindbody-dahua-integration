@@ -2,137 +2,201 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="space-y-6">
   <!-- Header -->
   <div>
     <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
-    <p class="text-sm text-gray-500 mt-1">Overview of your MindBody ↔ Dahua sync</p>
+    <p class="text-sm text-gray-500 mt-1">MindBody ↔ Dahua sync health</p>
   </div>
 
-  <!-- Stats Grid -->
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+  <!-- Failure alert banner (shown only when there are recent failures) -->
+  {% if stats.failed_24h > 0 %}
+  <div class="flex items-center gap-3 bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-3 text-sm">
+    <svg class="w-5 h-5 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <span><strong>{{ stats.failed_24h }} failed operation{{ 's' if stats.failed_24h != 1 }}</strong> in the last 24 hours.</span>
+    <a href="/admin/sync-queue?status=failed" class="ml-auto font-semibold underline whitespace-nowrap">View failed →</a>
+  </div>
+  {% endif %}
+
+  <!-- Stat cards row -->
+  <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4"
        hx-get="/admin/partials/stats" hx-trigger="every 30s" hx-swap="innerHTML">
-    <!-- Total Members -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-500">Total Members</p>
-          <p class="text-3xl font-bold text-gray-900 mt-1">{{ stats.total_members }}</p>
-        </div>
-        <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        </div>
-      </div>
-    </div>
-    <!-- Active Members -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-500">Active on Devices</p>
-          <p class="text-3xl font-bold text-green-600 mt-1">{{ stats.active_members }}</p>
-        </div>
-        <div class="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        </div>
-      </div>
-    </div>
-    <!-- Pending Queue -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-500">Pending Queue</p>
-          <p class="text-3xl font-bold text-amber-600 mt-1">{{ stats.pending_queue }}</p>
-        </div>
-        <div class="w-12 h-12 bg-amber-50 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-        </div>
-      </div>
-    </div>
-    <!-- Devices -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium text-gray-500">Devices</p>
-          <p class="text-3xl font-bold text-gray-900 mt-1">
-            <span class="text-green-600">{{ stats.devices_online }}</span>
-            <span class="text-gray-400 text-lg">/</span>
-            <span>{{ stats.devices_total }}</span>
-          </p>
-        </div>
-        <div class="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-        </div>
-      </div>
-    </div>
+    {% include "partials/stats.html" %}
   </div>
 
-  <!-- Quick Actions + Recent Activity -->
+  <!-- Device breakdown + right column -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Quick Actions -->
-    <div class="bg-white rounded-xl border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-      <div class="space-y-3">
-        <a href="/admin/sync-queue" class="w-full flex items-center gap-3 px-4 py-3 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-          View Sync Queue
-        </a>
-        <a href="/admin/mindbody-users" class="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-          <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          Browse MindBody Users
-        </a>
-        <a href="/admin/devices" class="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-          <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-          Manage Devices
-        </a>
-      </div>
-    </div>
 
-    <!-- Recent Queue Activity -->
-    <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Sync Activity</h2>
-      <div class="overflow-hidden">
+    <!-- Device Breakdown table (spans 2 cols) -->
+    <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-base font-semibold text-gray-900">Device Breakdown</h2>
+        <span class="text-xs text-gray-400">User counts load live</span>
+      </div>
+      <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="text-left text-gray-500 border-b border-gray-100">
-              <th class="pb-3 font-medium">Time</th>
-              <th class="pb-3 font-medium">Action</th>
-              <th class="pb-3 font-medium">Client</th>
-              <th class="pb-3 font-medium">Status</th>
+            <tr class="text-left text-xs font-semibold text-gray-400 uppercase tracking-wide bg-gray-50 border-b border-gray-100">
+              <th class="px-4 py-3">Device</th>
+              <th class="px-4 py-3">Gate</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3">Users</th>
+              <th class="px-4 py-3">Pending</th>
+              <th class="px-4 py-3">Failed</th>
+              <th class="px-4 py-3">Last seen</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            {% for item in recent_queue %}
-            <tr class="text-gray-700">
-              <td class="py-2.5 text-gray-500 text-xs">{{ item.created_at.strftime('%b %d %H:%M') if item.created_at else '—' }}</td>
-              <td class="py-2.5">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
-                  {% if item.action == 'enroll' %}bg-blue-50 text-blue-700
-                  {% elif item.action == 'deactivate' %}bg-red-50 text-red-700
-                  {% elif item.action == 'reactivate' %}bg-green-50 text-green-700
-                  {% elif item.action == 'update_window' %}bg-purple-50 text-purple-700
-                  {% else %}bg-gray-50 text-gray-700{% endif %}">
-                  {{ item.action }}
-                </span>
-              </td>
-              <td class="py-2.5 font-mono text-xs text-gray-600">{{ item.mindbody_client_id or '—' }}</td>
-              <td class="py-2.5">
-                {% if item.status == 'success' %}
-                <span class="inline-flex w-2 h-2 rounded-full bg-green-500"></span>
-                {% elif item.status == 'failed' %}
-                <span class="inline-flex w-2 h-2 rounded-full bg-red-500" title="{{ item.error_message or '' }}"></span>
+            {% for row in device_rows %}
+            {% set device = row.device %}
+            <tr class="text-gray-700 hover:bg-gray-50 transition">
+              <td class="px-4 py-3 font-medium">{{ device.name }}</td>
+              <td class="px-4 py-3">
+                {% if device.gate_type == 'male' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">&#9794; Male</span>
+                {% elif device.gate_type == 'female' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-pink-50 text-pink-700">&#9792; Female</span>
                 {% else %}
-                <span class="inline-flex w-2 h-2 rounded-full bg-yellow-400"></span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">All</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if device.status == 'online' %}
+                <span class="flex items-center gap-1.5 text-green-600">
+                  <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> online
+                </span>
+                {% elif device.status == 'offline' %}
+                <span class="flex items-center gap-1.5 text-amber-600">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> offline
+                </span>
+                {% else %}
+                <span class="flex items-center gap-1.5 text-gray-400">
+                  <span class="w-2 h-2 rounded-full bg-gray-300 inline-block"></span> {{ device.status }}
+                </span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 font-semibold"
+                  hx-get="/admin/devices/{{ device.id }}/user-count"
+                  hx-trigger="load"
+                  hx-swap="innerHTML">
+                <span class="inline-block w-4 h-4 border-2 border-gray-200 border-t-gray-400 rounded-full animate-spin"></span>
+              </td>
+              <td class="px-4 py-3">
+                {% if row.pending > 0 %}
+                <span class="font-semibold text-amber-600">{{ row.pending }}</span>
+                {% else %}
+                <span class="text-gray-300">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if row.failed_24h > 0 %}
+                <span class="font-semibold text-red-600">{{ row.failed_24h }}</span>
+                {% else %}
+                <span class="text-gray-300">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-gray-400 text-xs">
+                {% if device.last_seen_at %}
+                  {{ device.last_seen_at.strftime('%b %d %H:%M') }}
+                {% else %}
+                  —
                 {% endif %}
               </td>
             </tr>
             {% endfor %}
-            {% if not recent_queue %}
-            <tr><td colspan="4" class="py-8 text-center text-gray-400">No activity yet</td></tr>
+            {% if not device_rows %}
+            <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">No devices configured</td></tr>
             {% endif %}
           </tbody>
         </table>
       </div>
     </div>
+
+    <!-- Right column: activity feed + MindBody Breakdown -->
+    <div class="flex flex-col gap-6">
+
+      <!-- Recent activity -->
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100">
+          <h2 class="text-base font-semibold text-gray-900">Recent Activity</h2>
+        </div>
+        <ul class="divide-y divide-gray-50">
+          {% for item, device_name in recent_queue %}
+          <li class="flex items-start gap-3 px-4 py-3 text-sm">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold mt-0.5 flex-shrink-0
+              {% if item.status == 'failed' %}bg-red-50 text-red-700
+              {% elif item.action == 'enroll' %}bg-blue-50 text-blue-700
+              {% elif item.action == 'reactivate' %}bg-green-50 text-green-700
+              {% elif item.action == 'deactivate' %}bg-amber-50 text-amber-700
+              {% else %}bg-gray-50 text-gray-600{% endif %}">
+              {% if item.status == 'failed' %}failed{% else %}{{ item.action }}{% endif %}
+            </span>
+            <div class="flex-1 min-w-0">
+              <p class="font-medium text-gray-700 truncate">
+                #{{ item.mindbody_client_id }}
+                {% if device_name %}<span class="text-gray-400 font-normal">&#8594; {{ device_name }}</span>{% endif %}
+              </p>
+              <p class="text-xs text-gray-400 mt-0.5">{{ item.created_at.strftime('%b %d %H:%M') if item.created_at else '—' }}</p>
+            </div>
+            <span class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0
+              {% if item.status == 'success' %}bg-green-500
+              {% elif item.status == 'failed' %}bg-red-500
+              {% else %}bg-yellow-400{% endif %}">
+            </span>
+          </li>
+          {% endfor %}
+          {% if not recent_queue %}
+          <li class="px-4 py-8 text-center text-gray-400 text-sm">No activity yet</li>
+          {% endif %}
+        </ul>
+      </div>
+
+      <!-- MindBody Breakdown -->
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-100">
+          <h2 class="text-base font-semibold text-gray-900">MindBody Breakdown</h2>
+        </div>
+        <div class="px-6 py-4 space-y-4">
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-gray-600">Active subscription</span>
+              <span class="font-semibold">{{ mb_breakdown.active_sub_count }} <span class="text-gray-400 font-normal text-xs">({{ stats.active_members_pct }}%)</span></span>
+            </div>
+            <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-green-500 rounded-full" style="width: {{ stats.active_members_pct }}%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-gray-600">No subscription</span>
+              <span class="font-semibold text-gray-400">{{ mb_breakdown.no_sub_count }} <span class="font-normal text-xs">({{ 100 - stats.active_members_pct }}%)</span></span>
+            </div>
+            <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-gray-300 rounded-full" style="width: {{ 100 - stats.active_members_pct }}%"></div>
+            </div>
+          </div>
+
+          <div class="border-t border-gray-100 pt-4 grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-1">Male</p>
+              <p class="text-2xl font-bold text-blue-700">{{ mb_breakdown.male_count }}</p>
+              <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-2">
+                <div class="h-full bg-blue-400 rounded-full" style="width: {{ mb_breakdown.male_pct }}%"></div>
+              </div>
+            </div>
+            <div>
+              <p class="text-xs font-semibold text-pink-600 uppercase tracking-wide mb-1">Female</p>
+              <p class="text-2xl font-bold text-pink-700">{{ mb_breakdown.female_count }}</p>
+              <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-2">
+                <div class="h-full bg-pink-400 rounded-full" style="width: {{ mb_breakdown.female_pct }}%"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
   </div>
+
 </div>
 {% endblock %}
