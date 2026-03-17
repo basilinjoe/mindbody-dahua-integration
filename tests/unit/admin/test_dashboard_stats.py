@@ -62,9 +62,6 @@ def test_get_stats_active_members_pct_zero_when_no_members(db_session) -> None:
 
 
 def test_get_stats_active_members_pct(db_session) -> None:
-    from app.models.mindbody_client import MindBodyClient
-    from app.models.mindbody_membership import MindBodyMembership
-
     c1 = MindBodyClient(mindbody_id="1", first_name="A", last_name="B", active=True)
     c2 = MindBodyClient(mindbody_id="2", first_name="C", last_name="D", active=True)
     db_session.add_all([c1, c2])
@@ -75,3 +72,27 @@ def test_get_stats_active_members_pct(db_session) -> None:
     stats = _get_stats(db_session)
 
     assert stats["active_members_pct"] == 50
+
+
+def test_get_stats_success_rate_pct_all_success(db_session) -> None:
+    from datetime import timedelta
+    db_session.add_all([
+        DahuaSyncQueue(
+            run_id="r", device_id=1, mindbody_client_id="1",
+            action="enroll", status="success",
+            created_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1),
+        ),
+        DahuaSyncQueue(
+            run_id="r", device_id=1, mindbody_client_id="2",
+            action="enroll", status="failed",
+            created_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1),
+        ),
+    ])
+    db_session.commit()
+    stats = _get_stats(db_session)
+    assert stats["success_rate_pct"] == 50
+
+
+def test_get_stats_success_rate_pct_no_items_defaults_100(db_session) -> None:
+    stats = _get_stats(db_session)
+    assert stats["success_rate_pct"] == 100
