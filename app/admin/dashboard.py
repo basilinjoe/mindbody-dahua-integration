@@ -93,6 +93,7 @@ def _get_mb_breakdown(db) -> dict:
 
     male_pct = round(male_count * 100 / total) if total else 0
     female_pct = round(female_count * 100 / total) if total else 0
+    active_sub_pct = round(active_sub_count * 100 / total) if total else 0
 
     return {
         "total": total,
@@ -102,6 +103,7 @@ def _get_mb_breakdown(db) -> dict:
         "female_pct": female_pct,
         "active_sub_count": active_sub_count,
         "no_sub_count": no_sub_count,
+        "active_sub_pct": active_sub_pct,
     }
 
 

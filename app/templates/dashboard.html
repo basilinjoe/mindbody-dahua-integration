@@ -160,19 +160,19 @@
           <div>
             <div class="flex justify-between text-sm mb-1">
               <span class="text-gray-600">Active subscription</span>
-              <span class="font-semibold">{{ mb_breakdown.active_sub_count }} <span class="text-gray-400 font-normal text-xs">({{ stats.active_members_pct }}%)</span></span>
+              <span class="font-semibold">{{ mb_breakdown.active_sub_count }} <span class="text-gray-400 font-normal text-xs">({{ mb_breakdown.active_sub_pct }}%)</span></span>
             </div>
             <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div class="h-full bg-green-500 rounded-full" style="width: {{ stats.active_members_pct }}%"></div>
+              <div class="h-full bg-green-500 rounded-full" style="width: {{ mb_breakdown.active_sub_pct }}%"></div>
             </div>
           </div>
           <div>
             <div class="flex justify-between text-sm mb-1">
               <span class="text-gray-600">No subscription</span>
-              <span class="font-semibold text-gray-400">{{ mb_breakdown.no_sub_count }} <span class="font-normal text-xs">({{ 100 - stats.active_members_pct }}%)</span></span>
+              <span class="font-semibold text-gray-400">{{ mb_breakdown.no_sub_count }} <span class="font-normal text-xs">({{ 100 - mb_breakdown.active_sub_pct }}%)</span></span>
             </div>
             <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div class="h-full bg-gray-300 rounded-full" style="width: {{ 100 - stats.active_members_pct }}%"></div>
+              <div class="h-full bg-gray-300 rounded-full" style="width: {{ 100 - mb_breakdown.active_sub_pct }}%"></div>
             </div>
           </div>
 

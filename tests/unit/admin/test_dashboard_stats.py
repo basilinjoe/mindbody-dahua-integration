@@ -171,6 +171,7 @@ def test_get_mb_breakdown_counts_gender_and_subscriptions(db_session) -> None:
     assert bd["female_pct"] == 50  # 2/4 total
     assert bd["active_sub_count"] == 1
     assert bd["no_sub_count"] == 3
+    assert bd["active_sub_pct"] == 25  # 1/4 total
 
 
 def test_get_device_rows_includes_queue_counts(db_session) -> None:
