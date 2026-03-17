@@ -59,14 +59,89 @@ def _get_stats(db) -> dict:
     }
 
 
+def _get_recent_queue(db) -> list[tuple]:
+    """Return last 10 queue items with resolved device name.
+
+    Each element is a (DahuaSyncQueue, device_name: str | None) tuple.
+    """
+    rows = (
+        db.query(DahuaSyncQueue, DahuaDevice.name)
+        .outerjoin(DahuaDevice, DahuaDevice.id == DahuaSyncQueue.device_id)
+        .order_by(DahuaSyncQueue.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    return rows
+
+
+def _get_mb_breakdown(db) -> dict:
+    """Gender split and subscription breakdown for MindBody clients."""
+    total = db.query(MindBodyClient).count()
+
+    male_count = db.query(MindBodyClient).filter(MindBodyClient.gender == "Male").count()
+    female_count = db.query(MindBodyClient).filter(MindBodyClient.gender == "Female").count()
+
+    active_sub_subq = (
+        db.query(MindBodyMembership.id)
+        .filter(MindBodyMembership.mindbody_client_id == MindBodyClient.mindbody_id)
+        .filter(MindBodyMembership.is_active.is_(True))
+        .correlate(MindBodyClient)
+        .exists()
+    )
+    active_sub_count = db.query(MindBodyClient).filter(active_sub_subq).count()
+    no_sub_count = total - active_sub_count
+
+    male_pct = round(male_count * 100 / total) if total else 0
+    female_pct = round(female_count * 100 / total) if total else 0
+
+    return {
+        "total": total,
+        "male_count": male_count,
+        "female_count": female_count,
+        "male_pct": male_pct,
+        "female_pct": female_pct,
+        "active_sub_count": active_sub_count,
+        "no_sub_count": no_sub_count,
+    }
+
+
+def _get_device_rows(db) -> list[dict]:
+    """Return enabled devices with their pending and 24h-failed queue counts."""
+    devices = (
+        db.query(DahuaDevice)
+        .filter_by(is_enabled=True)
+        .order_by(DahuaDevice.name)
+        .all()
+    )
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
+    rows = []
+    for device in devices:
+        pending = (
+            db.query(DahuaSyncQueue)
+            .filter_by(device_id=device.id, status="pending")
+            .count()
+        )
+        failed_24h = (
+            db.query(DahuaSyncQueue)
+            .filter(
+                DahuaSyncQueue.device_id == device.id,
+                DahuaSyncQueue.status == "failed",
+                DahuaSyncQueue.created_at >= cutoff,
+            )
+            .count()
+        )
+        rows.append({"device": device, "pending": pending, "failed_24h": failed_24h})
+    return rows
+
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     db = request.app.state.db_session_factory()
     try:
         stats = _get_stats(db)
-        recent_queue = (
-            db.query(DahuaSyncQueue).order_by(DahuaSyncQueue.created_at.desc()).limit(10).all()
-        )
+        recent_queue = _get_recent_queue(db)
+        mb_breakdown = _get_mb_breakdown(db)
+        device_rows = _get_device_rows(db)
         return request.app.state.templates.TemplateResponse(
             request,
             "dashboard.html",
@@ -75,6 +150,8 @@ async def dashboard(request: Request):
                 "active_page": "dashboard",
                 "stats": stats,
                 "recent_queue": recent_queue,
+                "mb_breakdown": mb_breakdown,
+                "device_rows": device_rows,
             },
         )
     finally:
