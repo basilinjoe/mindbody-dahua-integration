@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
@@ -26,13 +28,32 @@ def _get_stats(db) -> dict:
         .filter(active_membership_subq)
         .count()
     )
+    active_members_pct = round(active_members * 100 / total_members) if total_members else 0
     pending_queue = db.query(DahuaSyncQueue).filter_by(status="pending").count()
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
+    failed_24h = (
+        db.query(DahuaSyncQueue)
+        .filter(DahuaSyncQueue.status == "failed", DahuaSyncQueue.created_at >= cutoff)
+        .count()
+    )
+    total_queue_24h = (
+        db.query(DahuaSyncQueue)
+        .filter(DahuaSyncQueue.created_at >= cutoff, DahuaSyncQueue.status != "pending")
+        .count()
+    )
+    success_rate_pct = (
+        round((total_queue_24h - failed_24h) * 100 / total_queue_24h)
+        if total_queue_24h else 100
+    )
     devices_total = db.query(DahuaDevice).filter_by(is_enabled=True).count()
     devices_online = db.query(DahuaDevice).filter_by(is_enabled=True, status="online").count()
     return {
         "total_members": total_members,
         "active_members": active_members,
+        "active_members_pct": active_members_pct,
         "pending_queue": pending_queue,
+        "failed_24h": failed_24h,
+        "success_rate_pct": success_rate_pct,
         "devices_total": devices_total,
         "devices_online": devices_online,
     }
