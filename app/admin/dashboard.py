@@ -5,12 +5,18 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+from sqlalchemy import case, func
+
 from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.device import DahuaDevice
 from app.models.mindbody_client import MindBodyClient
 from app.models.mindbody_membership import MindBodyMembership
 
 router = APIRouter()
+
+
+def _pct(count: int, total: int, *, default: int = 0) -> int:
+    return round(count * 100 / total) if total else default
 
 
 def _get_stats(db) -> dict:
@@ -28,7 +34,7 @@ def _get_stats(db) -> dict:
         .filter(active_membership_subq)
         .count()
     )
-    active_members_pct = round(active_members * 100 / total_members) if total_members else 0
+    active_members_pct = _pct(active_members, total_members)
     pending_queue = db.query(DahuaSyncQueue).filter_by(status="pending").count()
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
     failed_24h = (
@@ -41,10 +47,7 @@ def _get_stats(db) -> dict:
         .filter(DahuaSyncQueue.created_at >= cutoff, DahuaSyncQueue.status != "pending")
         .count()
     )
-    success_rate_pct = (
-        round((total_queue_24h - failed_24h) * 100 / total_queue_24h)
-        if total_queue_24h else 100
-    )
+    success_rate_pct = _pct(total_queue_24h - failed_24h, total_queue_24h, default=100)
     devices_total = db.query(DahuaDevice).filter_by(is_enabled=True).count()
     devices_online = db.query(DahuaDevice).filter_by(is_enabled=True, status="online").count()
     return {
@@ -91,9 +94,9 @@ def _get_mb_breakdown(db) -> dict:
     active_sub_count = db.query(MindBodyClient).filter(active_sub_subq).count()
     no_sub_count = total - active_sub_count
 
-    male_pct = round(male_count * 100 / total) if total else 0
-    female_pct = round(female_count * 100 / total) if total else 0
-    active_sub_pct = round(active_sub_count * 100 / total) if total else 0
+    male_pct = _pct(male_count, total)
+    female_pct = _pct(female_count, total)
+    active_sub_pct = _pct(active_sub_count, total)
 
     return {
         "total": total,
@@ -104,6 +107,7 @@ def _get_mb_breakdown(db) -> dict:
         "active_sub_count": active_sub_count,
         "no_sub_count": no_sub_count,
         "active_sub_pct": active_sub_pct,
+        "no_sub_pct": 100 - active_sub_pct,
     }
 
 
@@ -116,24 +120,32 @@ def _get_device_rows(db) -> list[dict]:
         .all()
     )
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
-    rows = []
-    for device in devices:
-        pending = (
-            db.query(DahuaSyncQueue)
-            .filter_by(device_id=device.id, status="pending")
-            .count()
+    device_ids = [d.id for d in devices]
+    counts = (
+        db.query(
+            DahuaSyncQueue.device_id,
+            func.count(case((DahuaSyncQueue.status == "pending", 1))).label("pending"),
+            func.count(
+                case((
+                    (DahuaSyncQueue.status == "failed")
+                    & (DahuaSyncQueue.created_at >= cutoff),
+                    1,
+                ))
+            ).label("failed_24h"),
         )
-        failed_24h = (
-            db.query(DahuaSyncQueue)
-            .filter(
-                DahuaSyncQueue.device_id == device.id,
-                DahuaSyncQueue.status == "failed",
-                DahuaSyncQueue.created_at >= cutoff,
-            )
-            .count()
-        )
-        rows.append({"device": device, "pending": pending, "failed_24h": failed_24h})
-    return rows
+        .filter(DahuaSyncQueue.device_id.in_(device_ids))
+        .group_by(DahuaSyncQueue.device_id)
+        .all()
+    )
+    counts_by_device = {row.device_id: row for row in counts}
+    return [
+        {
+            "device": device,
+            "pending": (counts_by_device[device.id].pending if device.id in counts_by_device else 0),
+            "failed_24h": (counts_by_device[device.id].failed_24h if device.id in counts_by_device else 0),
+        }
+        for device in devices
+    ]
 
 
 @router.get("/", response_class=HTMLResponse)
