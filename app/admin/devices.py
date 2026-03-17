@@ -463,6 +463,40 @@ async def device_user_delete(request: Request, device_id: int, user_id: str):
     return RedirectResponse(url=f"/admin/devices/{device_id}/users", status_code=303)
 
 
+@router.get("/{device_id}/user-count", response_class=HTMLResponse)
+async def device_user_count(request: Request, device_id: int):
+    """HTMX partial: live user count for a single device."""
+    db = request.app.state.db_session_factory()
+    try:
+        device = db.query(DahuaDevice).get(device_id)
+        if not device or device.status != "online":
+            return HTMLResponse("—")
+
+        client = DahuaClient(
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
+            door_ids=device.door_ids,
+        )
+        try:
+            users = await client.get_all_users()
+            count = len(users)
+        except Exception:
+            logger.exception("Failed to fetch user count from device %d", device_id)
+            return HTMLResponse("—")
+        finally:
+            await client.close()
+
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "partials/device_user_count.html",
+            {"count": count},
+        )
+    finally:
+        db.close()
+
+
 @router.post("/{device_id}/snapshot")
 async def device_snapshot(request: Request, device_id: int):
     """Capture a snapshot from the device camera. Returns JSON with base64 image."""
