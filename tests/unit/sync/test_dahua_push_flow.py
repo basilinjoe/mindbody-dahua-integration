@@ -97,7 +97,9 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         )
         return True
 
-    async def fake_mark_queue_item(item_id: int, status: str, error_message: str | None = None) -> None:
+    async def fake_mark_queue_item(
+        item_id: int, status: str, error_message: str | None = None
+    ) -> None:
         marks.append((item_id, status, error_message))
 
     async def fake_create_table_artifact(**_kwargs) -> None:  # noqa: ANN003

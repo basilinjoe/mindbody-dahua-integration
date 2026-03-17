@@ -15,8 +15,12 @@ class DahuaSyncQueue(Base):
     run_id: Mapped[str] = mapped_column(String(64), nullable=False)
     device_id: Mapped[int] = mapped_column(Integer, nullable=False)
     mindbody_client_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    action: Mapped[str] = mapped_column(String(16), nullable=False)  # enroll | deactivate | reactivate
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # pending | success | failed
+    action: Mapped[str] = mapped_column(
+        String(16), nullable=False
+    )  # enroll | deactivate | reactivate
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending"
+    )  # pending | success | failed
 
     # Execution context
     member_snapshot: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON — enroll only
@@ -28,9 +32,7 @@ class DahuaSyncQueue(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    __table_args__ = (
-        Index("ix_dahua_sync_queue_run_status", "run_id", "status"),
-    )
+    __table_args__ = (Index("ix_dahua_sync_queue_run_status", "run_id", "status"),)
 
     def __repr__(self) -> str:
         return (

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 
 import httpx
 
@@ -120,7 +119,13 @@ class DahuaClient:
         resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
         ok = resp.status_code == 200 and "OK" in resp.text
         if not ok:
-            logger.error("update_user_status %s -> %d failed on %s: %s", user_id, card_status, self.device_name, resp.text)
+            logger.error(
+                "update_user_status %s -> %d failed on %s: %s",
+                user_id,
+                card_status,
+                self.device_name,
+                resp.text,
+            )
         return ok
 
     @dahua_retry
@@ -170,7 +175,9 @@ class DahuaClient:
         resp = await self._post_json("/cgi-bin/FaceInfoManager.cgi?action=add", body)
         ok = resp.status_code == 200 and "OK" in resp.text
         if not ok:
-            logger.error("upload_face_photo %s failed on %s: %s", user_id, self.device_name, resp.text[:300])
+            logger.error(
+                "upload_face_photo %s failed on %s: %s", user_id, self.device_name, resp.text[:300]
+            )
         return ok
 
     @dahua_retry
@@ -252,8 +259,8 @@ class DahuaClient:
             # e.g. records[0].CardName=John
             if key.startswith("records["):
                 bracket_end = key.index("]")
-                idx = int(key[len("records["):bracket_end])
-                field = key[bracket_end + 2:]  # skip "].
+                idx = int(key[len("records[") : bracket_end])
+                field = key[bracket_end + 2 :]  # skip "].
                 if idx not in records:
                     records[idx] = {}
                 records[idx][field] = value
@@ -300,10 +307,14 @@ class DahuaClient:
                 f"{self._base}/cgi-bin/snapshot.cgi",
                 params={"channel": str(channel)},
             )
-            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith("image/"):
+            if resp.status_code == 200 and resp.headers.get("content-type", "").startswith(
+                "image/"
+            ):
                 return resp.content
             logger.error(
                 "capture_snapshot failed on %s (status %d, content-type %s)",
-                self.device_name, resp.status_code, resp.headers.get("content-type", "?"),
+                self.device_name,
+                resp.status_code,
+                resp.headers.get("content-type", "?"),
             )
             return None

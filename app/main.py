@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Callable
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +19,6 @@ from app.models.admin_user import AdminUser
 from app.models.database import init_async_db, init_db
 from app.models.device import DahuaDevice
 from app.models.export_job import ExportJob, ExportStatus  # noqa: F401 — registers table
-from app.sync.engine import SyncEngine
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -57,12 +56,9 @@ def _build_lifespan(
         # Reset any export jobs that were stuck in-flight when the server last stopped
         _recover_stuck_export_jobs(db_session_factory)
 
-        # MindBody client — still needed by SyncEngine (export/member routes use it)
+        # MindBody client (used by export routes)
         mb_factory = mindbody_client_factory or MindBodyClient
         mb_client = mb_factory(app_settings)
-
-        # Sync engine (still needed by export/member routes that use Dahua clients)
-        sync_engine = SyncEngine(mb_client, db_session_factory, app_settings)
 
         # Templates
         templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -70,7 +66,6 @@ def _build_lifespan(
         # Store on app.state for route handlers
         app.state.settings = app_settings
         app.state.db_session_factory = db_session_factory
-        app.state.sync_engine = sync_engine
         app.state.templates = templates
 
         yield
@@ -112,14 +107,16 @@ def _seed_devices(db_session_factory, settings: Settings) -> None:
 
     # 2) Fall back to single DAHUA_DEFAULT_* vars (backward-compatible)
     if not devices_to_seed and settings.dahua_default_host:
-        devices_to_seed.append({
-            "name": "Default Device",
-            "host": settings.dahua_default_host,
-            "port": settings.dahua_default_port,
-            "username": settings.dahua_default_username,
-            "password": settings.dahua_default_password,
-            "door_ids": settings.dahua_default_door_ids,
-        })
+        devices_to_seed.append(
+            {
+                "name": "Default Device",
+                "host": settings.dahua_default_host,
+                "port": settings.dahua_default_port,
+                "username": settings.dahua_default_username,
+                "password": settings.dahua_default_password,
+                "door_ids": settings.dahua_default_door_ids,
+            }
+        )
 
     if not devices_to_seed:
         return

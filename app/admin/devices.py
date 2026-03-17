@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import base64
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Request, Form
+from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.clients.dahua import DahuaClient
 from app.models.device import DahuaDevice
-from app.models.member import SyncedMember
+from app.models.mindbody_client import MindBodyClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/devices")
@@ -37,7 +37,13 @@ async def device_list(request: Request):
 async def device_add_form(request: Request):
     return request.app.state.templates.TemplateResponse(
         "devices/form.html",
-        {"request": request, "session_user": request.state.user, "active_page": "devices", "device": None, "error": None},
+        {
+            "request": request,
+            "session_user": request.state.user,
+            "active_page": "devices",
+            "device": None,
+            "error": None,
+        },
     )
 
 
@@ -75,7 +81,13 @@ async def device_add_submit(
         db.rollback()
         return request.app.state.templates.TemplateResponse(
             "devices/form.html",
-            {"request": request, "session_user": request.state.user, "active_page": "devices", "device": None, "error": str(e)},
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": None,
+                "error": str(e),
+            },
         )
     finally:
         db.close()
@@ -90,7 +102,13 @@ async def device_edit_form(request: Request, device_id: int):
             return RedirectResponse(url="/admin/devices", status_code=303)
         return request.app.state.templates.TemplateResponse(
             "devices/form.html",
-            {"request": request, "session_user": request.state.user, "active_page": "devices", "device": device, "error": None},
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": device,
+                "error": None,
+            },
         )
     finally:
         db.close()
@@ -133,7 +151,13 @@ async def device_edit_submit(
         db.rollback()
         return request.app.state.templates.TemplateResponse(
             "devices/form.html",
-            {"request": request, "session_user": request.state.user, "active_page": "devices", "device": device, "error": str(e)},
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": device,
+                "error": str(e),
+            },
         )
     finally:
         db.close()
@@ -175,7 +199,7 @@ async def device_health_check(request: Request, device_id: int):
             online = await client.health_check()
             device.status = "online" if online else "offline"
             if online:
-                device.last_seen_at = datetime.now(timezone.utc)
+                device.last_seen_at = datetime.now(UTC)
             db.commit()
         finally:
             await client.close()
@@ -201,8 +225,10 @@ async def device_open_door(request: Request, device_id: int):
         door_id = int(request.query_params.get("door", device.door_ids.split(",")[0].strip()))
 
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
@@ -230,8 +256,10 @@ async def device_close_door(request: Request, device_id: int):
         door_id = int(request.query_params.get("door", device.door_ids.split(",")[0].strip()))
 
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
@@ -256,9 +284,8 @@ async def device_users(request: Request, device_id: int):
         if not device:
             return RedirectResponse(url="/admin/devices", status_code=303)
 
-        # Build set of synced UserIDs for cross-reference
-        synced = db.query(SyncedMember.dahua_user_id).all()
-        synced_ids = {row[0] for row in synced}
+        # Build set of known MindBody IDs for cross-reference
+        synced_ids = {row[0] for row in db.query(MindBodyClient.mindbody_id).all()}
 
         users: list[dict] = []
         error = None
@@ -303,15 +330,17 @@ async def device_user_detail(request: Request, device_id: int, user_id: str):
         if not device:
             return RedirectResponse(url="/admin/devices", status_code=303)
 
-        # Check if this user is synced from our system
-        synced_member = db.query(SyncedMember).filter_by(dahua_user_id=user_id).first()
+        # Look up MindBody client by user_id (which equals mindbody_id for integer IDs)
+        synced_member = db.query(MindBodyClient).filter_by(mindbody_id=user_id).first()
 
         user = None
         error = None
         device_face_photo = None
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
@@ -357,8 +386,10 @@ async def device_user_activate(request: Request, device_id: int, user_id: str):
             return RedirectResponse(url="/admin/devices", status_code=303)
 
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
@@ -384,8 +415,10 @@ async def device_user_freeze(request: Request, device_id: int, user_id: str):
             return RedirectResponse(url="/admin/devices", status_code=303)
 
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
@@ -411,8 +444,10 @@ async def device_user_delete(request: Request, device_id: int, user_id: str):
             return RedirectResponse(url="/admin/devices", status_code=303)
 
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
@@ -438,14 +473,18 @@ async def device_snapshot(request: Request, device_id: int):
             return JSONResponse({"error": "Device not found"}, status_code=404)
 
         client = DahuaClient(
-            host=device.host, port=device.port,
-            username=device.username, password=device.password,
+            host=device.host,
+            port=device.port,
+            username=device.username,
+            password=device.password,
             door_ids=device.door_ids,
         )
         try:
             image_bytes = await client.capture_snapshot()
             if not image_bytes:
-                return JSONResponse({"error": "Failed to capture snapshot from device"}, status_code=502)
+                return JSONResponse(
+                    {"error": "Failed to capture snapshot from device"}, status_code=502
+                )
             b64 = base64.b64encode(image_bytes).decode("ascii")
             return JSONResponse({"image": f"data:image/jpeg;base64,{b64}"})
         finally:

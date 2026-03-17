@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -99,7 +99,8 @@ class SyncScheduler:
 
     async def _run_export_cleanup(self) -> None:
         from app.models.export_job import ExportJob, ExportStatus
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+        cutoff = datetime.now(UTC) - timedelta(hours=24)
         db = self._db_session_factory()
         try:
             old_jobs = (

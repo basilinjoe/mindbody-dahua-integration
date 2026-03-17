@@ -17,20 +17,42 @@ def test_plan_device_operations_creates_all_action_types() -> None:
     """
     active_member_ids = {"101", "102", "104"}
     member_map = {
-        "101": {"Id": "101", "FirstName": "Alex", "LastName": "One", "Gender": "male",
-                "PhotoUrl": "https://img/101", "Email": "101@x.com"},
-        "102": {"Id": "102", "FirstName": "Blair", "LastName": "Two", "Gender": "male",
-                "PhotoUrl": "https://img/102", "Email": "102@x.com"},
-        "104": {"Id": "104", "FirstName": "Casey", "LastName": "Four", "Gender": "male",
-                "PhotoUrl": "https://img/104", "Email": "104@x.com"},
+        "101": {
+            "Id": "101",
+            "FirstName": "Alex",
+            "LastName": "One",
+            "Gender": "male",
+            "PhotoUrl": "https://img/101",
+            "Email": "101@x.com",
+        },
+        "102": {
+            "Id": "102",
+            "FirstName": "Blair",
+            "LastName": "Two",
+            "Gender": "male",
+            "PhotoUrl": "https://img/102",
+            "Email": "102@x.com",
+        },
+        "104": {
+            "Id": "104",
+            "FirstName": "Casey",
+            "LastName": "Four",
+            "Gender": "male",
+            "PhotoUrl": "https://img/104",
+            "Email": "104@x.com",
+        },
     }
     # Dahua device state:
     #   101 → CardStatus=0 (active), ValidDateEnd="2026-03-31 23:59:59"
     #   102 → CardStatus=4 (frozen)
     #   103 → CardStatus=0 (active) — no longer in active member set
     dahua_users = [
-        {"UserID": "101", "CardStatus": "0", "ValidDateStart": "2026-01-01 00:00:00",
-         "ValidDateEnd": "2026-03-31 23:59:59"},
+        {
+            "UserID": "101",
+            "CardStatus": "0",
+            "ValidDateStart": "2026-01-01 00:00:00",
+            "ValidDateEnd": "2026-03-31 23:59:59",
+        },
         {"UserID": "102", "CardStatus": "4", "ValidDateStart": "", "ValidDateEnd": ""},
         {"UserID": "103", "CardStatus": "0", "ValidDateStart": "", "ValidDateEnd": ""},
     ]
@@ -95,13 +117,22 @@ def test_plan_device_operations_no_op_when_already_in_sync() -> None:
     """Active member already enrolled with correct window → no operations."""
     active_member_ids = {"101"}
     member_map = {
-        "101": {"Id": "101", "FirstName": "A", "LastName": "B", "Gender": "male",
-                "PhotoUrl": None, "Email": None},
+        "101": {
+            "Id": "101",
+            "FirstName": "A",
+            "LastName": "B",
+            "Gender": "male",
+            "PhotoUrl": None,
+            "Email": None,
+        },
     }
     dahua_users = [
-        {"UserID": "101", "CardStatus": "0",
-         "ValidDateStart": "2026-01-01 00:00:00",
-         "ValidDateEnd": "2026-12-31 23:59:59"},
+        {
+            "UserID": "101",
+            "CardStatus": "0",
+            "ValidDateStart": "2026-01-01 00:00:00",
+            "ValidDateEnd": "2026-12-31 23:59:59",
+        },
     ]
     membership_windows = {
         "101": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),

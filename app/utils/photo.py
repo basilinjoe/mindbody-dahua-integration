@@ -19,7 +19,9 @@ async def download_photo(url: str) -> bytes | None:
             resp.raise_for_status()
             content_type = resp.headers.get("content-type", "")
             if "image" not in content_type and len(resp.content) < 1000:
-                logger.warning("URL %s did not return an image (content-type: %s)", url, content_type)
+                logger.warning(
+                    "URL %s did not return an image (content-type: %s)", url, content_type
+                )
                 return None
             return resp.content
     except Exception:

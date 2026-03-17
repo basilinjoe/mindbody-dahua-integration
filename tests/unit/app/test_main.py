@@ -7,7 +7,9 @@ from app.models.admin_user import AdminUser
 from app.models.device import DahuaDevice
 
 
-def test_create_app_registers_stateful_routes_and_static(settings, db_session_factory, fake_mindbody_client) -> None:
+def test_create_app_registers_stateful_routes_and_static(
+    settings, db_session_factory, fake_mindbody_client
+) -> None:
     app = create_app(
         settings=settings,
         db_session_factory_override=db_session_factory,

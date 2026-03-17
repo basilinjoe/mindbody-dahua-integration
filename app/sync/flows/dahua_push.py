@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
@@ -38,7 +38,14 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
             "Dahua push is DISABLED (dahua_push_enabled=%r) — skipping all device operations",
             push_enabled,
         )
-        return {"enrolled": 0, "deactivated": 0, "reactivated": 0, "window_updated": 0, "failed": 0, "skipped": len(items)}
+        return {
+            "enrolled": 0,
+            "deactivated": 0,
+            "reactivated": 0,
+            "window_updated": 0,
+            "failed": 0,
+            "skipped": len(items),
+        }
 
     if not items:
         flow_logger.info("No pending items — nothing to push")
@@ -59,19 +66,16 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
                 result = await enroll_on_device(item.device_id, member, photo_max_kb)
                 success = bool(result)
             elif item.action == "deactivate":
-                success = await deactivate_on_device(
-                    item.device_id, item.dahua_user_id, item.enrollment_id
-                )
+                success = await deactivate_on_device(item.device_id, item.dahua_user_id)
             elif item.action == "reactivate":
-                success = await reactivate_on_device(
-                    item.device_id, item.dahua_user_id, item.enrollment_id
-                )
+                success = await reactivate_on_device(item.device_id, item.dahua_user_id)
             elif item.action == "update_window":
                 window = json.loads(item.member_snapshot or "{}")
                 success = await update_window_on_device(
-                    item.device_id, item.dahua_user_id,
-                    window.get("valid_start"), window.get("valid_end"),
-                    item.enrollment_id,
+                    item.device_id,
+                    item.dahua_user_id,
+                    window.get("valid_start"),
+                    window.get("valid_end"),
                 )
             else:
                 raise ValueError(f"Unknown action: {item.action!r}")
@@ -87,7 +91,11 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
             err = str(exc)
             logger.warning(
                 "Queue item %d failed (action=%s device=%d client=%s): %s",
-                item.id, item.action, item.device_id, item.mindbody_client_id, err,
+                item.id,
+                item.action,
+                item.device_id,
+                item.mindbody_client_id,
+                err,
             )
             await mark_queue_item(item.id, "failed", err)
             return item.action, err
@@ -106,11 +114,14 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
 
     flow_logger.info(
         "Dahua push complete — enrolled=%d deactivated=%d reactivated=%d window_updated=%d failed=%d",
-        stats["enrolled"], stats["deactivated"], stats["reactivated"],
-        stats["window_updated"], stats["failed"],
+        stats["enrolled"],
+        stats["deactivated"],
+        stats["reactivated"],
+        stats["window_updated"],
+        stats["failed"],
     )
 
-    run_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    run_ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
     await create_table_artifact(  # type: ignore[misc]
         key="dahua-push-results",
         table=[{"metric": k, "count": v} for k, v in stats.items()],

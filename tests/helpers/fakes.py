@@ -31,8 +31,12 @@ class FakeMindBodyClient:
             raise self.raise_get_all
         return self.all_clients
 
-    async def get_clients(self, *, limit: int = 200, offset: int = 0, search_text: str = "") -> list[dict]:
-        self.calls.append(("get_clients", {"limit": limit, "offset": offset, "search_text": search_text}))
+    async def get_clients(
+        self, *, limit: int = 200, offset: int = 0, search_text: str = ""
+    ) -> list[dict]:
+        self.calls.append(
+            ("get_clients", {"limit": limit, "offset": offset, "search_text": search_text})
+        )
         if search_text in self.search_results:
             return self.search_results[search_text]
         if search_text:
@@ -40,7 +44,7 @@ class FakeMindBodyClient:
                 if str(client.get("Id")) == str(search_text):
                     return [client]
             return []
-        return self.all_clients[offset: offset + limit]
+        return self.all_clients[offset : offset + limit]
 
     async def get_active_memberships(self, client_id: str) -> list[dict]:
         self.calls.append(("get_active_memberships", client_id))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_markdown_artifact
@@ -46,7 +46,7 @@ async def device_health_flow() -> None:
         flow_logger.info("Device %s (%s): %s", device.name, device.host, status)
 
     table_rows = "\n".join(rows)
-    markdown = f"""## Device Health Check — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC
+    markdown = f"""## Device Health Check — {datetime.now(UTC).strftime("%Y-%m-%d %H:%M")} UTC
 
 | Device | Host | Status |
 |--------|------|--------|

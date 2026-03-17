@@ -139,7 +139,9 @@ async def test_update_user_validity_omits_empty_dates_and_propagates_failure(
 
 
 @pytest.mark.asyncio
-async def test_parse_record_finder_response_and_get_all_users(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_parse_record_finder_response_and_get_all_users(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = DahuaClient("127.0.0.1")
     payload = (
         "records[0].UserID=1\n"
@@ -195,7 +197,9 @@ async def test_get_user_match_and_no_match(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
-async def test_capture_snapshot_returns_bytes_only_for_images(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_capture_snapshot_returns_bytes_only_for_images(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     client = DahuaClient("127.0.0.1")
     responses = [
         DummyResponse(200, headers={"content-type": "image/jpeg"}, content=b"img-bytes"),

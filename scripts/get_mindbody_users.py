@@ -8,6 +8,7 @@ Usage:
     python scripts/get_mindbody_users.py --client-id 12345
     python scripts/get_mindbody_users.py --all --output users.json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
+
 from app.config import Settings
 
 
@@ -132,14 +134,19 @@ async def main(args: argparse.Namespace) -> None:
         try:
             token = await get_token(http, settings)
         except httpx.HTTPStatusError as e:
-            print(f"ERROR: Authentication failed: {e.response.status_code} {e.response.text}", file=sys.stderr)
+            print(
+                f"ERROR: Authentication failed: {e.response.status_code} {e.response.text}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         print("Authentication successful.\n")
 
         # --- Fetch by specific client ID ---
         if args.client_id:
-            clients = await fetch_clients(http, settings, token, search_text=args.client_id, limit=1)
+            clients = await fetch_clients(
+                http, settings, token, search_text=args.client_id, limit=1
+            )
             if not clients:
                 print(f"No client found with ID: {args.client_id}")
                 sys.exit(0)
@@ -150,7 +157,9 @@ async def main(args: argparse.Namespace) -> None:
                 memberships = await fetch_memberships(http, settings, token, c.get("Id", ""))
                 print(f"Memberships ({len(memberships)}):")
                 for m in memberships:
-                    print(f"  - {m.get('Name', 'N/A')} | expires: {m.get('ExpirationDate', 'ongoing')}")
+                    print(
+                        f"  - {m.get('Name', 'N/A')} | expires: {m.get('ExpirationDate', 'ongoing')}"
+                    )
             print("=" * 50)
             if args.output:
                 Path(args.output).write_text(json.dumps(c, indent=2))
@@ -165,7 +174,9 @@ async def main(args: argparse.Namespace) -> None:
             print("Fetching all clients (this may take a while)...")
             clients = await fetch_all_clients(http, settings, token)
         else:
-            print("Fetching first page of clients (use --all for all, --search TEXT to filter)...\n")
+            print(
+                "Fetching first page of clients (use --all for all, --search TEXT to filter)...\n"
+            )
             clients = await fetch_clients(http, settings, token, limit=args.limit)
 
         print(f"Found {len(clients)} client(s).\n")
@@ -184,10 +195,16 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Fetch user details from Mindbody")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--search", metavar="TEXT", help="Search clients by name/email/phone")
-    group.add_argument("--client-id", metavar="ID", help="Fetch a specific client by their Mindbody ID")
+    group.add_argument(
+        "--client-id", metavar="ID", help="Fetch a specific client by their Mindbody ID"
+    )
     group.add_argument("--all", action="store_true", help="Fetch all clients (auto-paginates)")
-    parser.add_argument("--limit", type=int, default=20, help="Number of clients to fetch (default: 20)")
-    parser.add_argument("--memberships", action="store_true", help="Also fetch active memberships for each client")
+    parser.add_argument(
+        "--limit", type=int, default=20, help="Number of clients to fetch (default: 20)"
+    )
+    parser.add_argument(
+        "--memberships", action="store_true", help="Also fetch active memberships for each client"
+    )
     parser.add_argument("--output", metavar="FILE", help="Save results as JSON to this file")
     return parser.parse_args()
 

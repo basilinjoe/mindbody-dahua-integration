@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -93,7 +93,7 @@ async def test_get_all_clients_paginates_until_short_page() -> None:
 async def test_is_member_active_true_for_unexpired_membership() -> None:
     settings = _settings()
     base = settings.mindbody_api_base_url.rstrip("/")
-    future = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+    future = (datetime.now(UTC) + timedelta(days=10)).isoformat()
 
     respx.post(f"{base}/usertoken/issue").respond(200, json={"AccessToken": "token-3"})
     respx.get(f"{base}/client/activeclientmemberships").respond(
@@ -111,14 +111,16 @@ async def test_is_member_active_true_for_unexpired_membership() -> None:
 async def test_is_member_active_uses_contract_fallback() -> None:
     settings = _settings()
     base = settings.mindbody_api_base_url.rstrip("/")
-    past = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
-    future = (datetime.now(timezone.utc) + timedelta(days=5)).isoformat()
+    past = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    future = (datetime.now(UTC) + timedelta(days=5)).isoformat()
 
     respx.post(f"{base}/usertoken/issue").respond(200, json={"AccessToken": "token-4"})
     respx.get(f"{base}/client/activeclientmemberships").respond(
         200, json={"ClientMemberships": [{"ExpirationDate": past}]}
     )
-    respx.get(f"{base}/client/clientcontracts").respond(200, json={"Contracts": [{"EndDate": future}]})
+    respx.get(f"{base}/client/clientcontracts").respond(
+        200, json={"Contracts": [{"EndDate": future}]}
+    )
     mb = MindBodyClient(settings)
     try:
         assert await mb.is_member_active("2") is True
@@ -151,7 +153,9 @@ async def test_get_client_photo_url_ignores_default_photo(monkeypatch: pytest.Mo
     settings = _settings()
     mb = MindBodyClient(settings)
 
-    async def fake_get_clients(*, limit: int = 200, offset: int = 0, search_text: str = "") -> list[dict]:
+    async def fake_get_clients(
+        *, limit: int = 200, offset: int = 0, search_text: str = ""
+    ) -> list[dict]:
         assert search_text == "99"
         return [{"Id": 99, "PhotoUrl": "https://example.test/default-avatar.jpg"}]
 

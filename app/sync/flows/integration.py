@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from prefect import flow, get_run_logger
@@ -14,8 +14,8 @@ from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
     _format_dahua_date,
     fetch_all_memberships,
-    fetch_members,
     fetch_dahua_users_for_device,
+    fetch_members,
     load_active_members_from_db,
     load_device_ids_by_gate_type,
     load_membership_windows,
@@ -41,7 +41,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     flow_logger = get_run_logger()
     photo_max_kb = int(await Variable.get("photo_max_size_kb", default="200"))
     run_id = str(uuid4())
-    run_started_at = datetime.now(timezone.utc)
+    run_started_at = datetime.now(UTC)
     flow_logger.info("Integration sync started (run_id=%s)", run_id)
 
     # ── Step 1: Fetch from MindBody ────────────────────────────────────────────
@@ -80,7 +80,8 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     member_map: dict[str, dict] = {m["Id"]: m for m in active_members}
     flow_logger.info(
         "Classified: %d active male, %d active female",
-        len(active_male_ids), len(active_female_ids),
+        len(active_male_ids),
+        len(active_female_ids),
     )
 
     # ── Step 3: Load devices + membership windows in parallel ──────────────────
@@ -94,7 +95,8 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     )
     flow_logger.info(
         "Devices — male gates: %d, female gates: %d",
-        len(male_device_ids), len(female_device_ids),
+        len(male_device_ids),
+        len(female_device_ids),
     )
 
     all_device_ids = list(dict.fromkeys(male_device_ids + female_device_ids))
@@ -108,17 +110,13 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         return_exceptions=True,
     )
     dahua_users_by_device: dict[int, list[dict]] = {}
-    for device_id, result in zip(all_device_ids, dahua_users_results):
+    for device_id, result in zip(all_device_ids, dahua_users_results, strict=False):
         if isinstance(result, Exception):
-            flow_logger.error(
-                "Failed to fetch users from device %d: %s", device_id, result
-            )
+            flow_logger.error("Failed to fetch users from device %d: %s", device_id, result)
             dahua_users_by_device[device_id] = []
         else:
             dahua_users_by_device[device_id] = result
-            flow_logger.info(
-                "Device %d: found %d existing users on device", device_id, len(result)
-            )
+            flow_logger.info("Device %d: found %d existing users on device", device_id, len(result))
 
     # ── Step 5: Plan operations for each device ────────────────────────────────
     all_items: list[dict] = []
@@ -209,9 +207,7 @@ def _plan_device_operations(
     Does NOT execute any device operations.
     """
     # Build a map of UserID → Dahua user record for O(1) lookups
-    dahua_map: dict[str, dict] = {
-        u["UserID"]: u for u in dahua_users if u.get("UserID")
-    }
+    dahua_map: dict[str, dict] = {u["UserID"]: u for u in dahua_users if u.get("UserID")}
 
     items: list[dict] = []
 
@@ -224,23 +220,27 @@ def _plan_device_operations(
         if cid not in dahua_map:
             # Not on device yet → enroll
             m = member_map.get(cid, {})
-            items.append({
-                "device_id": device_id,
-                "mindbody_client_id": cid,
-                "action": "enroll",
-                "member_snapshot": json.dumps({
-                    "Id": cid,
-                    "FirstName": m.get("FirstName", ""),
-                    "LastName": m.get("LastName", ""),
-                    "Gender": m.get("Gender"),
-                    "PhotoUrl": m.get("PhotoUrl"),
-                    "Email": m.get("Email"),
-                    "valid_start": new_valid_start,
-                    "valid_end": new_valid_end,
-                }),
-                "dahua_user_id": None,
-                "enrollment_id": None,
-            })
+            items.append(
+                {
+                    "device_id": device_id,
+                    "mindbody_client_id": cid,
+                    "action": "enroll",
+                    "member_snapshot": json.dumps(
+                        {
+                            "Id": cid,
+                            "FirstName": m.get("FirstName", ""),
+                            "LastName": m.get("LastName", ""),
+                            "Gender": m.get("Gender"),
+                            "PhotoUrl": m.get("PhotoUrl"),
+                            "Email": m.get("Email"),
+                            "valid_start": new_valid_start,
+                            "valid_end": new_valid_end,
+                        }
+                    ),
+                    "dahua_user_id": None,
+                    "enrollment_id": None,
+                }
+            )
 
         else:
             dahua_user = dahua_map[cid]
@@ -248,14 +248,16 @@ def _plan_device_operations(
 
             if card_status == "4":
                 # Frozen on device but membership is active → reactivate
-                items.append({
-                    "device_id": device_id,
-                    "mindbody_client_id": cid,
-                    "action": "reactivate",
-                    "member_snapshot": None,
-                    "dahua_user_id": cid,
-                    "enrollment_id": None,
-                })
+                items.append(
+                    {
+                        "device_id": device_id,
+                        "mindbody_client_id": cid,
+                        "action": "reactivate",
+                        "member_snapshot": None,
+                        "dahua_user_id": cid,
+                        "enrollment_id": None,
+                    }
+                )
 
             else:
                 # Active on device — check if access window needs updating
@@ -265,17 +267,21 @@ def _plan_device_operations(
                     new_valid_end != current_valid_end
                     or (new_valid_start and new_valid_start != current_valid_start)
                 ):
-                    items.append({
-                        "device_id": device_id,
-                        "mindbody_client_id": cid,
-                        "action": "update_window",
-                        "member_snapshot": json.dumps({
-                            "valid_start": new_valid_start,
-                            "valid_end": new_valid_end,
-                        }),
-                        "dahua_user_id": cid,
-                        "enrollment_id": None,
-                    })
+                    items.append(
+                        {
+                            "device_id": device_id,
+                            "mindbody_client_id": cid,
+                            "action": "update_window",
+                            "member_snapshot": json.dumps(
+                                {
+                                    "valid_start": new_valid_start,
+                                    "valid_end": new_valid_end,
+                                }
+                            ),
+                            "dahua_user_id": cid,
+                            "enrollment_id": None,
+                        }
+                    )
 
     # ── Users on device not in active set → deactivate ────────────────────────
     for user_id, dahua_user in dahua_map.items():
@@ -283,13 +289,15 @@ def _plan_device_operations(
             continue  # handled above
         card_status = str(dahua_user.get("CardStatus", "0"))
         if card_status != "4":  # only act if not already frozen
-            items.append({
-                "device_id": device_id,
-                "mindbody_client_id": user_id,
-                "action": "deactivate",
-                "member_snapshot": None,
-                "dahua_user_id": user_id,
-                "enrollment_id": None,
-            })
+            items.append(
+                {
+                    "device_id": device_id,
+                    "mindbody_client_id": user_id,
+                    "action": "deactivate",
+                    "member_snapshot": None,
+                    "dahua_user_id": user_id,
+                    "enrollment_id": None,
+                }
+            )
 
     return items

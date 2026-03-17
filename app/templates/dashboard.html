@@ -36,15 +36,15 @@
         </div>
       </div>
     </div>
-    <!-- Missing Photos -->
+    <!-- Pending Queue -->
     <div class="bg-white rounded-xl border border-gray-200 p-6">
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-sm font-medium text-gray-500">Missing Photos</p>
-          <p class="text-3xl font-bold text-amber-600 mt-1">{{ stats.missing_photos }}</p>
+          <p class="text-sm font-medium text-gray-500">Pending Queue</p>
+          <p class="text-3xl font-bold text-amber-600 mt-1">{{ stats.pending_queue }}</p>
         </div>
         <div class="w-12 h-12 bg-amber-50 rounded-lg flex items-center justify-center">
-          <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
         </div>
       </div>
     </div>
@@ -72,63 +72,61 @@
     <div class="bg-white rounded-xl border border-gray-200 p-6">
       <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
       <div class="space-y-3">
-        <button hx-post="/admin/sync/trigger" hx-swap="none"
-          class="w-full flex items-center gap-3 px-4 py-3 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          Trigger Full Sync
-          <span class="htmx-indicator ml-auto">
-            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-          </span>
-        </button>
-        <a href="/admin/members?filter=missing_photo" class="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-          <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-          View Members Missing Photos
+        <a href="/admin/sync-queue" class="w-full flex items-center gap-3 px-4 py-3 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+          View Sync Queue
         </a>
-        <a href="/admin/members/add" class="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-          <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
-          Add Manual Member
+        <a href="/admin/mindbody-users" class="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+          <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Browse MindBody Users
+        </a>
+        <a href="/admin/devices" class="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+          <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          Manage Devices
         </a>
       </div>
     </div>
 
-    <!-- Recent Activity -->
+    <!-- Recent Queue Activity -->
     <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-6">
-      <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Sync Activity</h2>
       <div class="overflow-hidden">
         <table class="w-full text-sm">
           <thead>
             <tr class="text-left text-gray-500 border-b border-gray-100">
               <th class="pb-3 font-medium">Time</th>
               <th class="pb-3 font-medium">Action</th>
-              <th class="pb-3 font-medium">Member</th>
+              <th class="pb-3 font-medium">Client</th>
               <th class="pb-3 font-medium">Status</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-50">
-            {% for log in recent_logs %}
+            {% for item in recent_queue %}
             <tr class="text-gray-700">
-              <td class="py-2.5 text-gray-500 text-xs">{{ log.created_at.strftime('%b %d %H:%M') }}</td>
+              <td class="py-2.5 text-gray-500 text-xs">{{ item.created_at.strftime('%b %d %H:%M') if item.created_at else '—' }}</td>
               <td class="py-2.5">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium
-                  {% if log.action == 'enroll' %}bg-blue-50 text-blue-700
-                  {% elif log.action == 'deactivate' %}bg-red-50 text-red-700
-                  {% elif log.action == 'reactivate' %}bg-green-50 text-green-700
-                  {% elif log.action == 'photo_upload' %}bg-purple-50 text-purple-700
+                  {% if item.action == 'enroll' %}bg-blue-50 text-blue-700
+                  {% elif item.action == 'deactivate' %}bg-red-50 text-red-700
+                  {% elif item.action == 'reactivate' %}bg-green-50 text-green-700
+                  {% elif item.action == 'update_window' %}bg-purple-50 text-purple-700
                   {% else %}bg-gray-50 text-gray-700{% endif %}">
-                  {{ log.action }}
+                  {{ item.action }}
                 </span>
               </td>
-              <td class="py-2.5">{{ log.member_name or log.mindbody_client_id or '-' }}</td>
+              <td class="py-2.5 font-mono text-xs text-gray-600">{{ item.mindbody_client_id or '—' }}</td>
               <td class="py-2.5">
-                {% if log.success %}
+                {% if item.status == 'success' %}
                 <span class="inline-flex w-2 h-2 rounded-full bg-green-500"></span>
+                {% elif item.status == 'failed' %}
+                <span class="inline-flex w-2 h-2 rounded-full bg-red-500" title="{{ item.error_message or '' }}"></span>
                 {% else %}
-                <span class="inline-flex w-2 h-2 rounded-full bg-red-500" title="{{ log.error_message }}"></span>
+                <span class="inline-flex w-2 h-2 rounded-full bg-yellow-400"></span>
                 {% endif %}
               </td>
             </tr>
             {% endfor %}
-            {% if not recent_logs %}
+            {% if not recent_queue %}
             <tr><td colspan="4" class="py-8 text-center text-gray-400">No activity yet</td></tr>
             {% endif %}
           </tbody>

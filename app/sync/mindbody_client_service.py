@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -10,10 +10,20 @@ from app.models.mindbody_client import MindBodyClient
 logger = logging.getLogger(__name__)
 
 _FIELDS = (
-    "unique_id", "first_name", "last_name", "email",
-    "mobile_phone", "home_phone", "work_phone", "status",
-    "active", "birth_date", "gender", "created_at_mb",
-    "last_modified_at_mb", "photo_url",
+    "unique_id",
+    "first_name",
+    "last_name",
+    "email",
+    "mobile_phone",
+    "home_phone",
+    "work_phone",
+    "status",
+    "active",
+    "birth_date",
+    "gender",
+    "created_at_mb",
+    "last_modified_at_mb",
+    "photo_url",
 )
 
 
@@ -42,7 +52,7 @@ def refresh_mindbody_clients(db: Session, clients: list[dict]) -> None:
     db.query(MindBodyClient).delete()
     db.flush()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seen_ids: set[str] = set()
     for c in clients:
         mid = str(c.get("Id", "")).strip()
@@ -59,7 +69,7 @@ def upsert_mindbody_clients(db: Session, clients: list[dict]) -> tuple[int, int]
 
     Returns (updated, inserted) counts.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     seen_ids: set[str] = set()
     updated = inserted = 0
 
@@ -85,7 +95,9 @@ def upsert_mindbody_clients(db: Session, clients: list[dict]) -> tuple[int, int]
 
 def get_last_fetched_at(db: Session) -> datetime | None:
     """Return the most recent last_fetched_at timestamp from the local cache."""
-    result = db.query(MindBodyClient.last_fetched_at).order_by(
-        MindBodyClient.last_fetched_at.desc()
-    ).first()
+    result = (
+        db.query(MindBodyClient.last_fetched_at)
+        .order_by(MindBodyClient.last_fetched_at.desc())
+        .first()
+    )
     return result[0] if result else None

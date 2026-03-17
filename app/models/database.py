@@ -83,6 +83,7 @@ def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     global AsyncSessionLocal
     if AsyncSessionLocal is None:
         import os
+
         database_url = os.environ.get("DATABASE_URL", "sqlite:///./data/sync.db")
         init_async_db(database_url)
     return AsyncSessionLocal  # type: ignore[return-value]

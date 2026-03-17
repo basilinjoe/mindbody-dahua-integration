@@ -43,7 +43,9 @@ def test_webhook_invalid_signature_returns_401() -> None:
     app = _build_app(signature_key="secret")
     body = b'{"eventId":"client.updated","eventData":{"clientId":"1"}}'
     with TestClient(app) as client:
-        resp = client.post("/webhooks/mindbody", content=body, headers={"X-Mindbody-Signature": "bad"})
+        resp = client.post(
+            "/webhooks/mindbody", content=body, headers={"X-Mindbody-Signature": "bad"}
+        )
     assert resp.status_code == 401
 
 
@@ -72,7 +74,10 @@ def test_webhook_relevant_event_triggers_sync() -> None:
             resp = client.post(
                 "/webhooks/mindbody",
                 content=body,
-                headers={"X-Mindbody-Signature": _signature(body, "secret"), "Content-Type": "application/json"},
+                headers={
+                    "X-Mindbody-Signature": _signature(body, "secret"),
+                    "Content-Type": "application/json",
+                },
             )
 
     assert resp.status_code == 200
@@ -92,7 +97,10 @@ def test_webhook_irrelevant_event_does_not_trigger_sync() -> None:
         resp = client.post(
             "/webhooks/mindbody",
             content=body,
-            headers={"X-Mindbody-Signature": _signature(body, "secret"), "Content-Type": "application/json"},
+            headers={
+                "X-Mindbody-Signature": _signature(body, "secret"),
+                "Content-Type": "application/json",
+            },
         )
 
     assert resp.status_code == 200

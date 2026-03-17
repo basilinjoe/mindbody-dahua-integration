@@ -6,7 +6,9 @@ from app.api.deps import get_db_session, get_settings, get_sync_engine
 
 
 def test_dependency_helpers_return_app_state_objects(settings) -> None:
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(sync_engine="engine", settings=settings)))
+    request = SimpleNamespace(
+        app=SimpleNamespace(state=SimpleNamespace(sync_engine="engine", settings=settings))
+    )
 
     assert get_sync_engine(request) == "engine"
     assert get_settings(request) is settings

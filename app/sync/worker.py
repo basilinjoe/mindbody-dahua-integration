@@ -12,6 +12,7 @@ On startup:
     - sync-member/default           (webhook/manual trigger)
     - device-health/scheduled       (every M minutes, health check)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -83,10 +84,10 @@ async def _create_block_from_env() -> None:
         return
 
     block = MindBodyCredentials(
-        api_key=api_key,       # type: ignore[arg-type]
-        site_id=site_id,       # type: ignore[arg-type]
-        username=username,     # type: ignore[arg-type]
-        password=password,     # type: ignore[arg-type]
+        api_key=api_key,  # type: ignore[arg-type]
+        site_id=site_id,  # type: ignore[arg-type]
+        username=username,  # type: ignore[arg-type]
+        password=password,  # type: ignore[arg-type]
         base_url=base_url,
     )
     await block.save("production", overwrite=True)
@@ -107,10 +108,7 @@ async def _setup() -> tuple[int, int]:
     db = sync_factory()
     try:
         device_ids = [
-            d.id
-            for d in db.query(DahuaDevice)
-            .filter(DahuaDevice.is_enabled.is_(True))
-            .all()
+            d.id for d in db.query(DahuaDevice).filter(DahuaDevice.is_enabled.is_(True)).all()
         ]
     finally:
         db.close()
@@ -151,7 +149,6 @@ async def main() -> None:
             name="default",
             tags=["webhook"],
         ),
-
         # Full sync — every N minutes
         await sync_integration_flow.ato_deployment(
             name="full",
@@ -159,7 +156,6 @@ async def main() -> None:
             parameters={"sync_type": "scheduled"},
             tags=["integration", "full"],
         ),
-
         # Scheduled health check
         await device_health_flow.ato_deployment(
             name="scheduled",

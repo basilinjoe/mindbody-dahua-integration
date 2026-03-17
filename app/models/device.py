@@ -24,7 +24,9 @@ class DahuaDevice(Base):
     enable_integration: Mapped[bool] = mapped_column(Boolean, default=True)
     # When False, this device is excluded from all Prefect sync operations
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="unknown")  # online / offline / error / unknown
+    status: Mapped[str] = mapped_column(
+        String(16), default="unknown"
+    )  # online / offline / error / unknown
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     def __repr__(self) -> str:

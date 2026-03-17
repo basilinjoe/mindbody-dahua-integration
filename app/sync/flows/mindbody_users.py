@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_markdown_artifact
@@ -31,7 +31,7 @@ async def sync_mindbody_users_flow(modified_after: datetime | None = None) -> in
     count = await upsert_mindbody_users_batch(members)
     flow_logger.info("Upserted %d user records into mindbody_clients", count)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
     await create_markdown_artifact(
         key="mindbody-user-sync",
         markdown=f"## MindBody User Sync — {timestamp} UTC\n- Scope: {scope}\n- Upserted: {count} users",

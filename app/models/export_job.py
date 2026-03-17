@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.database import Base
 
 
-class ExportStatus(str, enum.Enum):
+class ExportStatus(enum.StrEnum):
     pending = "pending"
     running = "running"
     complete = "complete"
@@ -20,7 +20,9 @@ class ExportJob(Base):
     __tablename__ = "export_jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    status: Mapped[str] = mapped_column(Enum(ExportStatus), default=ExportStatus.pending, nullable=False)
+    status: Mapped[str] = mapped_column(
+        Enum(ExportStatus), default=ExportStatus.pending, nullable=False
+    )
     zip_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     file_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
     error_msg: Mapped[str | None] = mapped_column(Text, nullable=True)

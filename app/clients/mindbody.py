@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -30,7 +30,7 @@ class MindBodyClient:
     # ---- Auth ---------------------------------------------------------------
 
     async def _ensure_token(self) -> str:
-        if self._token and self._token_expiry and self._token_expiry > datetime.now(timezone.utc):
+        if self._token and self._token_expiry and self._token_expiry > datetime.now(UTC):
             return self._token
         logger.info("Requesting new MindBody user token")
         resp = await self._http.post(
@@ -42,7 +42,7 @@ class MindBodyClient:
         data = resp.json()
         self._token = data["AccessToken"]
         # MindBody tokens are typically valid for ~24h; refresh a bit early
-        self._token_expiry = datetime.now(timezone.utc).replace(hour=23, minute=0)
+        self._token_expiry = datetime.now(UTC).replace(hour=23, minute=0)
         return self._token
 
     def _headers(self) -> dict[str, str]:
@@ -74,7 +74,9 @@ class MindBodyClient:
             params["request.lastModifiedDate"] = last_modified_date.strftime("%Y-%m-%dT%H:%M:%S")
         if modified_after is not None:
             params["modifiedAfter"] = modified_after.isoformat()
-        resp = await self._http.get(f"{self._base}/client/clients", headers=self._headers(), params=params)
+        resp = await self._http.get(
+            f"{self._base}/client/clients", headers=self._headers(), params=params
+        )
         resp.raise_for_status()
         return resp.json().get("Clients", [])
 
@@ -137,7 +139,7 @@ class MindBodyClient:
     async def is_member_active(self, client_id: str) -> bool:
         """Check if a client has any active membership or contract."""
         memberships = await self.get_active_memberships(client_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for m in memberships:
             exp = m.get("ExpirationDate")
             if exp is None:

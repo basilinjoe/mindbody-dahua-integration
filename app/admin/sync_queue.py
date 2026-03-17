@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import outerjoin
 
 from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.device import DahuaDevice

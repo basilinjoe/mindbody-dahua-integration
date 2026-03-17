@@ -59,7 +59,10 @@ def test_readiness_not_ready_when_database_fails(monkeypatch) -> None:
         resp = client.get("/health/ready")
 
     assert resp.status_code == 200
-    assert resp.json() == {"status": "not_ready", "checks": {"database": False, "dahua_devices": True}}
+    assert resp.json() == {
+        "status": "not_ready",
+        "checks": {"database": False, "dahua_devices": True},
+    }
 
 
 def test_readiness_not_ready_when_dahua_fails(monkeypatch) -> None:
@@ -75,7 +78,10 @@ def test_readiness_not_ready_when_dahua_fails(monkeypatch) -> None:
         resp = client.get("/health/ready")
 
     assert resp.status_code == 200
-    assert resp.json() == {"status": "not_ready", "checks": {"database": True, "dahua_devices": False}}
+    assert resp.json() == {
+        "status": "not_ready",
+        "checks": {"database": True, "dahua_devices": False},
+    }
 
 
 def test_check_database_helper_true_and_false() -> None:
@@ -84,9 +90,9 @@ def test_check_database_helper_true_and_false() -> None:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    SessionLocal = sessionmaker(bind=engine)
+    session_local = sessionmaker(bind=engine)
     try:
-        assert health_module._check_database(SessionLocal) is True
+        assert health_module._check_database(session_local) is True
         assert health_module._check_database(lambda: None) is False
     finally:
         engine.dispose()

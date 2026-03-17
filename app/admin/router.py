@@ -4,11 +4,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.admin.auth import get_current_user, router as auth_router
+from app.admin.auth import get_current_user
+from app.admin.auth import router as auth_router
 from app.admin.dashboard import router as dashboard_router
 from app.admin.devices import router as devices_router
 from app.admin.export_jobs import router as export_jobs_router
-from app.admin.members import router as members_router
 from app.admin.mindbody_users import router as mindbody_users_router
 from app.admin.sync_queue import router as sync_queue_router
 
@@ -19,7 +19,6 @@ admin_router.include_router(auth_router)
 
 # Protected routes
 admin_router.include_router(dashboard_router)
-admin_router.include_router(members_router)
 admin_router.include_router(export_jobs_router)
 admin_router.include_router(mindbody_users_router)
 admin_router.include_router(devices_router)

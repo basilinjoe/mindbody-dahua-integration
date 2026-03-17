@@ -53,7 +53,9 @@ async def test_run_full_sync_success() -> None:
 
 @pytest.mark.asyncio
 async def test_run_full_sync_failure_is_swallowed() -> None:
-    engine = DummyEngine(full_sync=AsyncMock(side_effect=RuntimeError("boom")), check_device_health=AsyncMock())
+    engine = DummyEngine(
+        full_sync=AsyncMock(side_effect=RuntimeError("boom")), check_device_health=AsyncMock()
+    )
     scheduler = SyncScheduler(engine)
 
     await scheduler._run_full_sync()
@@ -62,7 +64,9 @@ async def test_run_full_sync_failure_is_swallowed() -> None:
 
 @pytest.mark.asyncio
 async def test_run_health_check_failure_is_swallowed() -> None:
-    engine = DummyEngine(full_sync=AsyncMock(), check_device_health=AsyncMock(side_effect=RuntimeError("down")))
+    engine = DummyEngine(
+        full_sync=AsyncMock(), check_device_health=AsyncMock(side_effect=RuntimeError("down"))
+    )
     scheduler = SyncScheduler(engine)
 
     await scheduler._run_health_check()

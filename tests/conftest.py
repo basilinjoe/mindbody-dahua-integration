@@ -10,12 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import Settings
 from app.main import create_app
-from app.models.admin_user import AdminUser
 from app.models.database import Base
-from app.models.device import DahuaDevice
-from app.models.member import SyncedMember
-from app.models.mindbody_client import MindBodyClient
-from app.models.sync_log import SyncLog
 from tests.helpers.fakes import FakeMindBodyClient
 
 
@@ -48,10 +43,10 @@ def db_session_factory() -> Generator[sessionmaker[Session], None, None]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(bind=engine)
     try:
-        yield SessionLocal
+        yield session_local
     finally:
         Base.metadata.drop_all(bind=engine)
         engine.dispose()

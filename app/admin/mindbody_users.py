@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import asc, desc
+from sqlalchemy.orm import joinedload
 
 from app.models.mindbody_client import MindBodyClient
 from app.models.mindbody_membership import MindBodyMembership
@@ -47,7 +48,7 @@ async def mindbody_user_list(
     db = request.app.state.db_session_factory()
     page_size = 50
     try:
-        q = db.query(MindBodyClient)
+        q = db.query(MindBodyClient).options(joinedload(MindBodyClient.memberships))
         if search:
             q = q.filter(
                 MindBodyClient.first_name.ilike(f"%{search}%")
@@ -85,18 +86,28 @@ async def mindbody_user_list(
 
         # Distinct values for filter dropdowns
         statuses = [
-            r[0] for r in db.query(MindBodyClient.status).distinct().order_by(MindBodyClient.status).all()
+            r[0]
+            for r in db.query(MindBodyClient.status)
+            .distinct()
+            .order_by(MindBodyClient.status)
+            .all()
             if r[0]
         ]
         genders = [
-            r[0] for r in db.query(MindBodyClient.gender).distinct().order_by(MindBodyClient.gender).all()
+            r[0]
+            for r in db.query(MindBodyClient.gender)
+            .distinct()
+            .order_by(MindBodyClient.gender)
+            .all()
             if r[0]
         ]
 
         # Last refresh timestamp
-        latest = db.query(MindBodyClient.last_fetched_at).order_by(
-            MindBodyClient.last_fetched_at.desc()
-        ).first()
+        latest = (
+            db.query(MindBodyClient.last_fetched_at)
+            .order_by(MindBodyClient.last_fetched_at.desc())
+            .first()
+        )
         last_fetched_at = latest[0] if latest else None
 
         return request.app.state.templates.TemplateResponse(

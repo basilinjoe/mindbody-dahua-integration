@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -33,7 +33,9 @@ def get_current_user(request: Request) -> str | None:
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     templates = request.app.state.templates
-    return templates.TemplateResponse(request, "login.html", {"request": request, "session_user": None, "error": None})
+    return templates.TemplateResponse(
+        request, "login.html", {"request": request, "session_user": None, "error": None}
+    )
 
 
 @router.post("/login")

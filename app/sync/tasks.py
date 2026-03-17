@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from prefect import task
@@ -13,11 +13,9 @@ from sqlalchemy import select, update
 from app.clients.dahua import DahuaClient
 from app.clients.mindbody import MindBodyClient
 from app.config import Settings
-from app.models.database import _get_async_session_factory
 from app.models.dahua_sync_queue import DahuaSyncQueue
+from app.models.database import _get_async_session_factory
 from app.models.device import DahuaDevice
-from app.models.member import SyncedMember
-from app.models.member_device_enrollment import MemberDeviceEnrollment
 from app.models.mindbody_client import MindBodyClient as MindBodyClientModel
 from app.models.mindbody_membership import MindBodyMembership
 from app.sync.blocks import MindBodyCredentials
@@ -30,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Utility ────────────────────────────────────────────────────────────────────
+
 
 def _make_dahua_user_id(client_id: str) -> str:
     return str(int(client_id)) if client_id.isdigit() else client_id
@@ -81,6 +80,7 @@ async def _get_dahua_client(device_id: int) -> tuple[DahuaClient, DahuaDevice]:
 
 # ── MindBody tasks ─────────────────────────────────────────────────────────────
 
+
 @task(
     name="fetch-members",
     retries=3,
@@ -104,55 +104,8 @@ async def fetch_members(modified_after: datetime | None = None) -> list[dict]:
         await client.close()
 
 
-@task(name="fetch-member", retries=2, retry_delay_seconds=10, tags=["mindbody"])
-async def fetch_member(client_id: str) -> dict:
-    """Fetch a single MindBody client by ID."""
-    creds = await MindBodyCredentials.load("production")
-    client = MindBodyClient(settings=_settings_from_creds(creds))
-    try:
-        clients = await client.get_clients(search_text=client_id, limit=1)
-        return clients[0] if clients else {}
-    finally:
-        await client.close()
-
-
-@task(name="check-membership", retries=2, retry_delay_seconds=10, tags=["mindbody"])
-async def check_membership(client_id: str) -> bool:
-    """Return True if the MindBody member has an active membership."""
-    creds = await MindBodyCredentials.load("production")
-    client = MindBodyClient(settings=_settings_from_creds(creds))
-    try:
-        return await client.is_member_active(client_id)
-    finally:
-        await client.close()
-
-
-@task(
-    name="get-active-member-ids",
-    retries=2,
-    retry_delay_seconds=10,
-    cache_policy=INPUTS,
-    cache_expiration=timedelta(minutes=5),
-    tags=["mindbody"],
-)
-async def get_active_member_ids(client_ids: list[str]) -> set[str]:
-    """Return subset of client_ids whose membership is currently active."""
-    creds = await MindBodyCredentials.load("production")
-    client = MindBodyClient(settings=_settings_from_creds(creds))
-    try:
-        active: set[str] = set()
-        for cid in client_ids:
-            try:
-                if await client.is_member_active(cid):
-                    active.add(cid)
-            except Exception:
-                logger.warning("Could not check membership for %s", cid)
-        return active
-    finally:
-        await client.close()
-
-
 # ── DB helper tasks ─────────────────────────────────────────────────────────────
+
 
 @task(name="load-device-ids-by-gate-type", tags=["db"])
 async def load_device_ids_by_gate_type(gate_type: str) -> list[int]:
@@ -175,35 +128,8 @@ async def load_device_ids_by_gate_type(gate_type: str) -> list[int]:
         return [row[0] for row in result.fetchall()]
 
 
-@task(name="load-enrollments-for-device", tags=["db"])
-async def load_enrollments_for_device(device_id: int) -> dict[str, MemberDeviceEnrollment]:
-    """
-    Return active enrollments for a specific device.
-    Key: mindbody_client_id → MemberDeviceEnrollment row.
-    """
-    async with _get_async_session_factory()() as db:
-        result = await db.execute(
-            select(SyncedMember.mindbody_client_id, MemberDeviceEnrollment)
-            .join(MemberDeviceEnrollment, MemberDeviceEnrollment.synced_member_id == SyncedMember.id)
-            .where(MemberDeviceEnrollment.device_id == device_id)
-        )
-        return {row[0]: row[1] for row in result.fetchall()}
-
-
-@task(name="load-active-enrollments-for-member", tags=["db"])
-async def load_active_enrollments_for_member(client_id: str) -> list[MemberDeviceEnrollment]:
-    """Return all active device enrollments for a given MindBody client_id."""
-    async with _get_async_session_factory()() as db:
-        result = await db.execute(
-            select(MemberDeviceEnrollment)
-            .join(SyncedMember, SyncedMember.id == MemberDeviceEnrollment.synced_member_id)
-            .where(SyncedMember.mindbody_client_id == client_id)
-            .where(MemberDeviceEnrollment.is_active.is_(True))
-        )
-        return list(result.scalars().all())
-
-
 # ── Dahua tasks ─────────────────────────────────────────────────────────────────
+
 
 @task(name="enroll-on-device", retries=2, retry_delay_seconds=5, tags=["dahua"])
 async def enroll_on_device(device_id: int, member: dict, photo_max_kb: int = 200) -> bool:
@@ -214,7 +140,6 @@ async def enroll_on_device(device_id: int, member: dict, photo_max_kb: int = 200
     first_name = member.get("FirstName", "")
     last_name = member.get("LastName", "")
     card_name = f"{first_name} {last_name}".strip() or f"Member-{client_id}"
-    gender = (member.get("Gender") or "").lower() or None
     valid_start = member.get("valid_start")
     valid_end = member.get("valid_end")
 
@@ -222,8 +147,11 @@ async def enroll_on_device(device_id: int, member: dict, photo_max_kb: int = 200
         client, _ = await _get_dahua_client(device_id)
         try:
             success = await client.add_user(
-                user_id=user_id, card_name=card_name, card_no=card_no,
-                valid_start=valid_start, valid_end=valid_end,
+                user_id=user_id,
+                card_name=card_name,
+                card_no=card_no,
+                valid_start=valid_start,
+                valid_end=valid_end,
             )
 
             # Attempt face photo upload
@@ -240,97 +168,29 @@ async def enroll_on_device(device_id: int, member: dict, photo_max_kb: int = 200
         finally:
             await client.close()
 
-    # Record enrollment in DB
-    async with _get_async_session_factory()() as db:
-        # Get or create SyncedMember
-        result = await db.execute(
-            select(SyncedMember).where(SyncedMember.mindbody_client_id == client_id)
-        )
-        synced = result.scalar_one_or_none()
-        if synced is None:
-            synced = SyncedMember(
-                mindbody_client_id=client_id,
-                dahua_user_id=user_id,
-                card_no=card_no,
-                first_name=first_name,
-                last_name=last_name,
-                email=member.get("Email"),
-                gender=gender,
-                is_active_in_mindbody=True,
-                is_active_in_dahua=success,
-                has_face_photo=False,
-                is_manual=False,
-                last_synced_at=datetime.now(timezone.utc),
-            )
-            db.add(synced)
-            await db.flush()  # get synced.id
-        else:
-            synced.is_active_in_dahua = success
-            synced.last_synced_at = datetime.now(timezone.utc)
-            if gender:
-                synced.gender = gender
-
-        # Add enrollment record
-        enrollment = MemberDeviceEnrollment(
-            synced_member_id=synced.id,
-            device_id=device_id,
-            dahua_user_id=user_id,
-            is_active=success,
-            valid_start=valid_start if success else None,
-            valid_end=valid_end if success else None,
-        )
-        db.add(enrollment)
-        try:
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception("Failed to record enrollment for %s on device %d", client_id, device_id)
-
     return success
 
 
 @task(name="deactivate-on-device", retries=2, retry_delay_seconds=5, tags=["dahua"])
-async def deactivate_on_device(device_id: int, dahua_user_id: str, enrollment_id: int | None = None) -> bool:
-    """Freeze a user on a Dahua device (card_status=4) and mark enrollment inactive."""
+async def deactivate_on_device(device_id: int, dahua_user_id: str) -> bool:
+    """Freeze a user on a Dahua device (card_status=4)."""
     async with concurrency(f"dahua-device-{device_id}", occupy=1):
         client, _ = await _get_dahua_client(device_id)
         try:
-            success = await client.update_user_status(dahua_user_id, card_status=4)
+            return await client.update_user_status(dahua_user_id, card_status=4)
         finally:
             await client.close()
-
-    if success and enrollment_id:
-        async with _get_async_session_factory()() as db:
-            await db.execute(
-                update(MemberDeviceEnrollment)
-                .where(MemberDeviceEnrollment.id == enrollment_id)
-                .values(is_active=False, deactivated_at=datetime.now(timezone.utc))
-            )
-            await db.commit()
-
-    return success
 
 
 @task(name="reactivate-on-device", retries=2, retry_delay_seconds=5, tags=["dahua"])
-async def reactivate_on_device(device_id: int, dahua_user_id: str, enrollment_id: int | None = None) -> bool:
-    """Unfreeze a user on a Dahua device (card_status=0) and mark enrollment active."""
+async def reactivate_on_device(device_id: int, dahua_user_id: str) -> bool:
+    """Unfreeze a user on a Dahua device (card_status=0)."""
     async with concurrency(f"dahua-device-{device_id}", occupy=1):
         client, _ = await _get_dahua_client(device_id)
         try:
-            success = await client.update_user_status(dahua_user_id, card_status=0)
+            return await client.update_user_status(dahua_user_id, card_status=0)
         finally:
             await client.close()
-
-    if success and enrollment_id:
-        async with _get_async_session_factory()() as db:
-            await db.execute(
-                update(MemberDeviceEnrollment)
-                .where(MemberDeviceEnrollment.id == enrollment_id)
-                .values(is_active=True, deactivated_at=None)
-            )
-            await db.commit()
-
-    return success
 
 
 @task(name="check-device-health", retries=1, tags=["dahua"])
@@ -347,13 +207,12 @@ async def check_device_health_task(device_id: int) -> bool:
 async def load_all_devices() -> list[DahuaDevice]:
     """Return all enabled Dahua devices for health check."""
     async with _get_async_session_factory()() as db:
-        result = await db.execute(
-            select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True))
-        )
+        result = await db.execute(select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True)))
         return list(result.scalars().all())
 
 
 # ── MindBody user + membership persistence tasks ────────────────────────────────
+
 
 @task(
     name="fetch-all-memberships",
@@ -446,7 +305,7 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
     """
     from sqlalchemy import delete as sa_delete
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
     now = now_utc.replace(tzinfo=None)  # naive UTC for TIMESTAMP WITHOUT TIME ZONE columns
     total_inserted = 0
     async with _get_async_session_factory()() as db:
@@ -488,6 +347,7 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
 
 
 # ── Dahua sync queue tasks ───────────────────────────────────────────────────────
+
 
 @task(name="write-sync-queue-batch", tags=["db"])
 async def write_sync_queue_batch(run_id: str, items: list[dict]) -> int:
@@ -541,9 +401,7 @@ async def load_pending_queue_items(run_id: str) -> list[DahuaSyncQueue]:
 
 
 @task(name="mark-queue-item", tags=["db"])
-async def mark_queue_item(
-    item_id: int, status: str, error_message: str | None = None
-) -> None:
+async def mark_queue_item(item_id: int, status: str, error_message: str | None = None) -> None:
     """Update status, error_message, and processed_at for a single queue item."""
     async with _get_async_session_factory()() as db:
         await db.execute(
@@ -552,13 +410,14 @@ async def mark_queue_item(
             .values(
                 status=status,
                 error_message=error_message,
-                processed_at=datetime.now(timezone.utc),
+                processed_at=datetime.now(UTC),
             )
         )
         await db.commit()
 
 
 # ── Access window tasks ──────────────────────────────────────────────────────────
+
 
 @task(name="load-membership-windows", tags=["db"])
 async def load_membership_windows(
@@ -569,7 +428,7 @@ async def load_membership_windows(
     membership from mindbody_memberships. NULL expiration_date (ongoing) is preferred.
     Returns {client_id: (start_date, expiration_date)}.
     """
-    from app.models.mindbody_membership import MindBodyMembership as _MBM
+    from app.models.mindbody_membership import MindBodyMembership as _Mbm
 
     result_map: dict[str, tuple[str | None, str | None]] = {}
     if not client_ids:
@@ -577,9 +436,9 @@ async def load_membership_windows(
 
     async with _get_async_session_factory()() as db:
         rows = await db.execute(
-            select(_MBM.mindbody_client_id, _MBM.start_date, _MBM.expiration_date)
-            .where(_MBM.mindbody_client_id.in_(client_ids))
-            .where(_MBM.is_active.is_(True))
+            select(_Mbm.mindbody_client_id, _Mbm.start_date, _Mbm.expiration_date)
+            .where(_Mbm.mindbody_client_id.in_(client_ids))
+            .where(_Mbm.is_active.is_(True))
         )
         for cid, start, expiry in rows.fetchall():
             existing = result_map.get(cid)
@@ -651,23 +510,11 @@ async def update_window_on_device(
     dahua_user_id: str,
     valid_start: str | None,
     valid_end: str | None,
-    enrollment_id: int | None = None,
 ) -> bool:
     """Update ValidDateStart/ValidDateEnd for an existing user on a Dahua device."""
     async with concurrency(f"dahua-device-{device_id}", occupy=1):
         client, _ = await _get_dahua_client(device_id)
         try:
-            success = await client.update_user_validity(dahua_user_id, valid_start, valid_end)
+            return await client.update_user_validity(dahua_user_id, valid_start, valid_end)
         finally:
             await client.close()
-
-    if success and enrollment_id:
-        async with _get_async_session_factory()() as db:
-            await db.execute(
-                update(MemberDeviceEnrollment)
-                .where(MemberDeviceEnrollment.id == enrollment_id)
-                .values(valid_start=valid_start, valid_end=valid_end)
-            )
-            await db.commit()
-
-    return success

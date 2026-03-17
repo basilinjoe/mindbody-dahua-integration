@@ -5,7 +5,7 @@ import io
 import logging
 import re
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Request
@@ -25,52 +25,72 @@ EXPORTS_DIR.mkdir(exist_ok=True)
 # CSV builder helpers
 # ---------------------------------------------------------------------------
 
+
 def _build_mindbody_csv(clients: list[dict]) -> str:
     fieldnames = [
-        "mindbody_id", "first_name", "last_name", "email",
-        "mobile_phone", "home_phone", "work_phone",
-        "status", "active", "birth_date", "gender", "created_at", "photo_url",
+        "mindbody_id",
+        "first_name",
+        "last_name",
+        "email",
+        "mobile_phone",
+        "home_phone",
+        "work_phone",
+        "status",
+        "active",
+        "birth_date",
+        "gender",
+        "created_at",
+        "photo_url",
     ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     for c in clients:
-        writer.writerow({
-            "mindbody_id": c.get("Id", ""),
-            "first_name": c.get("FirstName", ""),
-            "last_name": c.get("LastName", ""),
-            "email": c.get("Email", ""),
-            "mobile_phone": c.get("MobilePhone", ""),
-            "home_phone": c.get("HomePhone", ""),
-            "work_phone": c.get("WorkPhone", ""),
-            "status": c.get("Status", ""),
-            "active": c.get("Active", ""),
-            "birth_date": c.get("BirthDate", ""),
-            "gender": c.get("Gender", ""),
-            "created_at": c.get("CreationDate", ""),
-            "photo_url": c.get("PhotoUrl", ""),
-        })
+        writer.writerow(
+            {
+                "mindbody_id": c.get("Id", ""),
+                "first_name": c.get("FirstName", ""),
+                "last_name": c.get("LastName", ""),
+                "email": c.get("Email", ""),
+                "mobile_phone": c.get("MobilePhone", ""),
+                "home_phone": c.get("HomePhone", ""),
+                "work_phone": c.get("WorkPhone", ""),
+                "status": c.get("Status", ""),
+                "active": c.get("Active", ""),
+                "birth_date": c.get("BirthDate", ""),
+                "gender": c.get("Gender", ""),
+                "created_at": c.get("CreationDate", ""),
+                "photo_url": c.get("PhotoUrl", ""),
+            }
+        )
     return buf.getvalue()
 
 
 def _build_dahua_csv(users: list[dict]) -> str:
     fieldnames = [
-        "user_id", "card_name", "card_no", "card_status",
-        "card_type", "valid_date_start", "valid_date_end",
+        "user_id",
+        "card_name",
+        "card_no",
+        "card_status",
+        "card_type",
+        "valid_date_start",
+        "valid_date_end",
     ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     for u in users:
-        writer.writerow({
-            "user_id": u.get("UserID", ""),
-            "card_name": u.get("CardName", ""),
-            "card_no": u.get("CardNo", ""),
-            "card_status": u.get("CardStatus", ""),
-            "card_type": u.get("CardType", ""),
-            "valid_date_start": u.get("ValidDateStart", ""),
-            "valid_date_end": u.get("ValidDateEnd", ""),
-        })
+        writer.writerow(
+            {
+                "user_id": u.get("UserID", ""),
+                "card_name": u.get("CardName", ""),
+                "card_no": u.get("CardNo", ""),
+                "card_status": u.get("CardStatus", ""),
+                "card_type": u.get("CardType", ""),
+                "valid_date_start": u.get("ValidDateStart", ""),
+                "valid_date_end": u.get("ValidDateEnd", ""),
+            }
+        )
     return buf.getvalue()
 
 
@@ -78,12 +98,13 @@ def _build_dahua_csv(users: list[dict]) -> str:
 # Background task
 # ---------------------------------------------------------------------------
 
+
 async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
     db = db_session_factory()
     try:
         job = db.query(ExportJob).get(job_id)
         job.status = ExportStatus.running
-        job.started_at = datetime.now(timezone.utc)
+        job.started_at = datetime.now(UTC)
         db.commit()
     finally:
         db.close()
@@ -106,7 +127,7 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
             buffers[f"{safe_name}_users.csv"] = _build_dahua_csv(users)
 
         # Write ZIP
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         file_name = f"export_{timestamp}_{job_id}.zip"
         zip_path = EXPORTS_DIR / file_name
         with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -117,7 +138,7 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
         job.status = ExportStatus.complete
         job.zip_path = str(zip_path)
         job.file_name = file_name
-        job.finished_at = datetime.now(timezone.utc)
+        job.finished_at = datetime.now(UTC)
         db.commit()
         logger.info("Export job %d complete: %s", job_id, file_name)
 
@@ -130,7 +151,7 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
             if job:
                 job.status = ExportStatus.failed
                 job.error_msg = str(exc)
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = datetime.now(UTC)
                 fresh.commit()
         finally:
             fresh.close()
@@ -142,17 +163,13 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("", response_class=HTMLResponse)
 async def exports_page(request: Request):
     """Dedicated exports page."""
     db = request.app.state.db_session_factory()
     try:
-        jobs = (
-            db.query(ExportJob)
-            .order_by(ExportJob.created_at.desc())
-            .limit(20)
-            .all()
-        )
+        jobs = db.query(ExportJob).order_by(ExportJob.created_at.desc()).limit(20).all()
         devices = db.query(DahuaDevice).filter_by(is_enabled=True).order_by(DahuaDevice.name).all()
         return request.app.state.templates.TemplateResponse(
             "exports/index.html",
@@ -195,12 +212,7 @@ async def export_jobs_partial(request: Request):
     """HTMX partial — returns the export jobs status panel."""
     db = request.app.state.db_session_factory()
     try:
-        jobs = (
-            db.query(ExportJob)
-            .order_by(ExportJob.created_at.desc())
-            .limit(20)
-            .all()
-        )
+        jobs = db.query(ExportJob).order_by(ExportJob.created_at.desc()).limit(20).all()
         return request.app.state.templates.TemplateResponse(
             "partials/export_jobs.html",
             {"request": request, "jobs": jobs},

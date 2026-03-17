@@ -1,4 +1,17 @@
 {
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python c:/Projects/mind-body-dahua/.claude/hooks/ruff_check.py"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(printf:*)",
@@ -20,7 +33,9 @@
       "Bash(python -m pytest tests/unit/app/test_main.py -q --tb=long)",
       "Bash(python -m pytest tests/unit/app/ tests/unit/api/ -q --tb=short)",
       "Bash(python -m pytest tests/ -q --tb=short)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/unit/admin/ tests/unit/sync/test_integration_plan_group.py -q)"
     ]
   }
 }
