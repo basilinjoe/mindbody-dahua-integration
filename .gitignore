@@ -14,3 +14,21 @@ venv/
 *.log
 extracts/
 .worktrees/
+
+# Coverage
+.coverage
+coverage.xml
+coverage.json
+htmlcov/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / local tooling
+.superpowers/
+
+# Env variants
+.env.*
+!.env.example
