@@ -13,6 +13,11 @@ def test_dashboard_page_renders_for_logged_in_user(logged_in_client, db_session)
 
     assert response.status_code == 200
     assert "Total Members" in response.text
+    assert "Active Subscriptions" in response.text
+    assert "Pending Queue" in response.text
+    assert "Devices Online" in response.text
+    assert "MindBody Breakdown" in response.text
+    assert "Device Breakdown" in response.text
 
 
 def test_dashboard_stats_partial_renders(logged_in_client, db_session) -> None:
@@ -25,3 +30,4 @@ def test_dashboard_stats_partial_renders(logged_in_client, db_session) -> None:
 
     assert response.status_code == 200
     assert "Total Members" in response.text
+    assert "Pending Queue" in response.text
