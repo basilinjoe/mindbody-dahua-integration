@@ -23,7 +23,6 @@ _FIELDS = (
     "gender",
     "created_at_mb",
     "last_modified_at_mb",
-    "photo_url",
 )
 
 
@@ -42,7 +41,6 @@ def _row_from_dict(c: dict, now: datetime) -> dict:
         "gender": c.get("Gender"),
         "created_at_mb": c.get("CreationDate"),
         "last_modified_at_mb": c.get("LastModifiedDateTime"),
-        "photo_url": c.get("PhotoUrl"),
         "last_fetched_at": now,
     }
 

@@ -143,23 +143,23 @@ async def refresh_mindbody_users(request: Request, full: bool = False):
     By default performs an incremental fetch (only clients modified since the
     last refresh).  Pass ?full=true to force a complete re-fetch and replace.
     """
-    db = request.app.state.db_session_factory()
-    try:
-        engine = request.app.state.sync_engine
-        last_fetched = None if full else get_last_fetched_at(db)
+    from app.clients.mindbody import MindBodyClient as _MindBodyClient
 
+    db = request.app.state.db_session_factory()
+    mb = _MindBodyClient(settings=request.app.state.settings)
+    try:
+        last_fetched = None if full else get_last_fetched_at(db)
+        clients = await mb.get_all_clients(modified_since=last_fetched)
         if last_fetched:
-            clients = await engine.mindbody.get_all_clients(modified_since=last_fetched)
             upsert_mindbody_clients(db, clients)
         else:
-            clients = await engine.mindbody.get_all_clients()
             refresh_mindbody_clients(db, clients)
-
         db.commit()
     except Exception:
         db.rollback()
         logger.exception("Failed to refresh MindBody clients")
     finally:
+        await mb.close()
         db.close()
 
     return RedirectResponse(url="/admin/mindbody-users", status_code=303)
