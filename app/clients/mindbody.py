@@ -10,6 +10,8 @@ from app.utils.retry import mindbody_retry
 
 logger = logging.getLogger(__name__)
 
+MINDBODY_PAGE_SIZE = 200  # MindBody API max items per page / bulk request
+
 
 class MindBodyClient:
     """MindBody Public API v6 client with automatic token management."""
@@ -63,7 +65,6 @@ class MindBodyClient:
         offset: int = 0,
         search_text: str = "",
         last_modified_date: datetime | None = None,
-        modified_after: datetime | None = None,
     ) -> list[dict]:
         """Get a page of clients."""
         await self._ensure_token()
@@ -72,8 +73,6 @@ class MindBodyClient:
             params["request.searchText"] = search_text
         if last_modified_date:
             params["request.lastModifiedDate"] = last_modified_date.strftime("%Y-%m-%dT%H:%M:%S")
-        if modified_after is not None:
-            params["modifiedAfter"] = modified_after.isoformat()
         resp = await self._http.get(
             f"{self._base}/client/clients", headers=self._headers(), params=params
         )
@@ -84,18 +83,16 @@ class MindBodyClient:
         self,
         *,
         modified_since: datetime | None = None,
-        modified_after: datetime | None = None,
     ) -> list[dict]:
-        """Auto-paginate through all clients, optionally filtered by modification date."""
+        """Auto-paginate through all clients, optionally filtered by last modified date."""
         all_clients: list[dict] = []
         offset = 0
-        page_size = 200
+        page_size = MINDBODY_PAGE_SIZE
         while True:
             page = await self.get_clients(
                 limit=page_size,
                 offset=offset,
                 last_modified_date=modified_since,
-                modified_after=modified_after,
             )
             if not page:
                 break
@@ -122,6 +119,28 @@ class MindBodyClient:
         )
         resp.raise_for_status()
         return resp.json().get("ClientMemberships", [])
+
+    @mindbody_retry
+    async def get_active_memberships_bulk(self, client_ids: list[str]) -> dict[str, list[dict]]:
+        """Fetch active memberships for up to 200 clients in a single API call.
+
+        Returns a dict keyed by client_id → list of membership dicts.
+        Uses /activeclientsmemberships (plural) bulk endpoint.
+        """
+        await self._ensure_token()
+        params = [("request.clientIds", cid) for cid in client_ids]
+        params.append(("request.limit", str(len(client_ids))))
+        resp = await self._http.get(
+            f"{self._base}/client/activeclientsmemberships",
+            headers=self._headers(),
+            params=params,
+        )
+        resp.raise_for_status()
+        result: dict[str, list[dict]] = {}
+        for entry in resp.json().get("ClientMemberships", []):
+            cid = entry.get("ClientId", "")
+            result[cid] = entry.get("Memberships", [])
+        return result
 
     @mindbody_retry
     async def get_client_contracts(self, client_id: str) -> list[dict]:

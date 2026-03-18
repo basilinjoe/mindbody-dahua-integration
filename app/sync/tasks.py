@@ -12,7 +12,7 @@ from sqlalchemy import delete, exists, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.clients.dahua import DahuaClient
-from app.clients.mindbody import MindBodyClient
+from app.clients.mindbody import MINDBODY_PAGE_SIZE, MindBodyClient
 from app.config import Settings
 from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.database import _get_async_session_factory
@@ -97,17 +97,18 @@ async def _dahua_device(device_id: int):
     cache_expiration=timedelta(minutes=5),
     tags=["mindbody"],
 )
-async def fetch_members(modified_after: datetime | None = None) -> list[dict]:
+async def fetch_members(modified_since: datetime | None = None) -> list[dict]:
     """
     Fetch MindBody clients.
-    - modified_after=None  → full fetch (all members)
-    - modified_after=<dt>  → incremental (only members modified since then)
+    - modified_since=None  → full fetch (all members)
+    - modified_since=<dt>  → incremental (only members modified on/after this date)
     Cached 5 min so concurrent flows share the same API call.
+    Uses request.lastModifiedDate — the correct spec parameter name.
     """
     creds = await MindBodyCredentials.load("production")
     client = MindBodyClient(settings=_settings_from_creds(creds))
     try:
-        return await client.get_all_clients(modified_after=modified_after)
+        return await client.get_all_clients(modified_since=modified_since)
     finally:
         await client.close()
 
@@ -210,26 +211,30 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
     """
     Fetch active memberships for all given MindBody client IDs.
     Returns a dict keyed by client_id → list of membership dicts.
-    Runs as a single task (not one task per member) to keep Prefect UI clean.
+    Uses the bulk endpoint (/activeclientsmemberships) in batches of 200.
     """
+    if not client_ids:
+        return {}
+
     creds = await MindBodyCredentials.load("production")
     client = MindBodyClient(settings=_settings_from_creds(creds))
-    sem = asyncio.Semaphore(10)
-
-    async def _fetch_one(cid: str) -> tuple[str, list[dict]]:
-        async with sem:
-            try:
-                memberships = await client.get_active_memberships(cid)
-                return cid, memberships
-            except Exception:
-                logger.warning("Could not fetch memberships for client %s", cid)
-                return cid, []
-
     try:
-        pairs = await asyncio.gather(*[_fetch_one(cid) for cid in client_ids])
+        batch_size = MINDBODY_PAGE_SIZE
+        batches = [client_ids[i : i + batch_size] for i in range(0, len(client_ids), batch_size)]
+        chunks = await asyncio.gather(
+            *[client.get_active_memberships_bulk(batch) for batch in batches],
+            return_exceptions=True,
+        )
     finally:
         await client.close()
-    return dict(pairs)
+
+    result: dict[str, list[dict]] = {}
+    for batch, chunk in zip(batches, chunks, strict=True):
+        if isinstance(chunk, Exception):
+            logger.warning("Bulk membership fetch failed for batch of %d — skipping", len(batch))
+        else:
+            result.update(chunk)
+    return result
 
 
 @task(name="upsert-mindbody-users-batch", tags=["db"])

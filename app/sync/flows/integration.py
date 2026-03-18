@@ -44,7 +44,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     flow_logger.info("Integration sync started (run_id=%s)", run_id)
 
     # ── Step 1: Fetch from MindBody ────────────────────────────────────────────
-    all_members = await fetch_members(modified_after=None)
+    all_members = await fetch_members()
     active_members_from_api = [m for m in all_members if m.get("Active")]
     flow_logger.info("Fetched %d members from MindBody (%d active)", len(all_members), len(active_members_from_api))
 
