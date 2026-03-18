@@ -268,12 +268,7 @@ async def upsert_mindbody_users_batch(members: list[dict]) -> int:
         })
     if not rows:
         return 0
-    from app.models.database import async_engine
-    _dialect = async_engine.dialect.name if async_engine else "postgresql"
-    if _dialect == "sqlite":
-        from sqlalchemy.dialects.sqlite import insert as _insert
-    else:
-        from sqlalchemy.dialects.postgresql import insert as _insert
+    from sqlalchemy.dialects.postgresql import insert as _insert
     stmt = _insert(MindBodyClientModel).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=["mindbody_id"],

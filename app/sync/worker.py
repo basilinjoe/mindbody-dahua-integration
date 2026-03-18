@@ -98,7 +98,7 @@ async def _setup() -> tuple[int, int]:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    database_url = os.environ.get("DATABASE_URL", "sqlite:///./data/sync.db")
+    database_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost/sync")
 
     # Sync DB for reading device list
     sync_factory = init_db(database_url)

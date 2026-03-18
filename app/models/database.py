@@ -22,10 +22,7 @@ class Base(DeclarativeBase):
 def init_db(database_url: str) -> sessionmaker[Session]:
     """Initialise the synchronous engine. Called by FastAPI lifespan."""
     global engine, SessionLocal
-    connect_args = {}
-    if database_url.startswith("sqlite"):
-        connect_args["check_same_thread"] = False
-    engine = create_engine(database_url, connect_args=connect_args)
+    engine = create_engine(database_url)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(bind=engine)
     return SessionLocal
@@ -38,16 +35,13 @@ def init_async_db(database_url: str) -> async_sessionmaker[AsyncSession]:
     database_url should use an async driver, e.g.:
         postgresql+asyncpg://user:pass@host/db
 
-    If a sync URL is given (starts with postgresql+psycopg2 or sqlite),
+    If a sync URL is given (starts with postgresql+psycopg2 or postgresql://),
     it is auto-converted to the async equivalent so callers can share
     the same DATABASE_URL env var.
     """
     global async_engine, AsyncSessionLocal
     async_url = _to_async_url(database_url)
-    connect_args: dict = {}
-    if async_url.startswith("sqlite+aiosqlite"):
-        connect_args["check_same_thread"] = False
-    async_engine = create_async_engine(async_url, echo=False, connect_args=connect_args)
+    async_engine = create_async_engine(async_url, echo=False)
     AsyncSessionLocal = async_sessionmaker(
         async_engine, expire_on_commit=False, class_=AsyncSession
     )
@@ -55,15 +49,11 @@ def init_async_db(database_url: str) -> async_sessionmaker[AsyncSession]:
 
 
 def _to_async_url(url: str) -> str:
-    """Convert a sync DB URL to its async equivalent."""
+    """Convert a sync PostgreSQL URL to its async equivalent."""
     if url.startswith("postgresql+psycopg2://"):
         return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
     if url.startswith("postgresql://"):
         return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    if url.startswith("sqlite:///"):
-        return url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
-    if url.startswith("sqlite+pysqlite:///"):
-        return url.replace("sqlite+pysqlite:///", "sqlite+aiosqlite:///", 1)
     return url  # already async or unknown
 
 
@@ -84,7 +74,7 @@ def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     if AsyncSessionLocal is None:
         import os
 
-        database_url = os.environ.get("DATABASE_URL", "sqlite:///./data/sync.db")
+        database_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost/sync")
         init_async_db(database_url)
     return AsyncSessionLocal  # type: ignore[return-value]
 

@@ -138,7 +138,7 @@ def _seed_devices(db_session_factory, settings: Settings) -> None:
                     door_ids=entry.get("door_ids", "0"),
                     is_enabled=bool(entry.get("is_enabled", True)),
                     gate_type=entry.get("gate_type", "all"),
-                    enable_integration=bool(entry.get("enable_integration", False)),
+                    enable_integration=bool(entry.get("enable_integration", True)),
                 )
                 db.add(device)
                 logger.info("Seeded Dahua device: %s (%s)", device.name, host)

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     dahua_devices: str = ""
 
     # -- Application --
-    database_url: str = "sqlite:///./data/sync.db"
+    database_url: str = "postgresql://postgres:postgres@localhost/sync"
     sync_interval_minutes: int = 30
     device_health_interval_minutes: int = 5
     log_level: str = "INFO"

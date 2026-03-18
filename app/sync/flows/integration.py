@@ -105,7 +105,10 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
 
     all_device_ids = list(dict.fromkeys(male_device_ids + female_device_ids))
     if not all_device_ids:
-        flow_logger.warning("No enabled devices found — nothing to push")
+        flow_logger.warning(
+            "No enabled devices with integration enabled found — nothing to push. "
+            "Enable integration for a device via the admin UI (Devices → enable_integration)."
+        )
         return
 
     # ── Step 4: Fetch live users from all Dahua devices in parallel ────────────

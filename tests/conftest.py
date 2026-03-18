@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.config import Settings
 from app.main import create_app
 from app.models.database import Base
 from tests.helpers.fakes import FakeMindBodyClient
+
+_TEST_DB_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost/test_sync"
+)
 
 
 @pytest.fixture
@@ -26,7 +30,7 @@ def settings() -> Settings:
         dahua_devices="",
         dahua_default_host="",
         dahua_default_password="",
-        database_url="sqlite+pysqlite:///:memory:",
+        database_url=_TEST_DB_URL,
         admin_username="admin",
         admin_password="changeme",
         secret_key="unit-test-secret-key",
@@ -39,11 +43,7 @@ def settings() -> Settings:
 
 @pytest.fixture
 def db_session_factory() -> Generator[sessionmaker[Session], None, None]:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = create_engine(_TEST_DB_URL)
     session_local = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     Base.metadata.create_all(bind=engine)
     try:

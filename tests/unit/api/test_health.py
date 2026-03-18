@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.api import health as health_module
+
+_TEST_DB_URL = os.environ.get(
+    "TEST_DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost/test_sync"
+)
 
 
 class DummySyncEngine:
@@ -85,11 +90,7 @@ def test_readiness_not_ready_when_dahua_fails(monkeypatch) -> None:
 
 
 def test_check_database_helper_true_and_false() -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+    engine = create_engine(_TEST_DB_URL)
     session_local = sessionmaker(bind=engine)
     try:
         assert health_module._check_database(session_local) is True
