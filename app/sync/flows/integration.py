@@ -45,8 +45,25 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
 
     # ── Step 1: Fetch from MindBody ────────────────────────────────────────────
     all_members = await fetch_members()
+    flow_logger.info("Fetched %d members from MindBody", len(all_members))
+
+    id_counts = Counter(str(m["Id"]) for m in all_members if m.get("Id"))
+    duplicate_ids = {mid: count for mid, count in id_counts.items() if count > 1}
+    if duplicate_ids:
+        flow_logger.warning("Duplicate mindbody_id values in API response: %s", duplicate_ids)
+        deduped: dict[str, dict] = {}
+        for m in all_members:
+            mid = str(m.get("Id", ""))
+            if not mid:
+                continue
+            existing = deduped.get(mid)
+            if existing is None or (m.get("Active") and not existing.get("Active")):
+                deduped[mid] = m
+        all_members = list(deduped.values())
+        flow_logger.info("After dedup: %d members", len(all_members))
+
     active_members_from_api = [m for m in all_members if m.get("Active")]
-    flow_logger.info("Fetched %d members from MindBody (%d active)", len(all_members), len(active_members_from_api))
+    flow_logger.info("%d active members after dedup", len(active_members_from_api))
 
     if not all_members:
         flow_logger.info("No members fetched from MindBody")

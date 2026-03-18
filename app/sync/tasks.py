@@ -220,17 +220,20 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
     try:
         batch_size = MINDBODY_PAGE_SIZE
         batches = [client_ids[i : i + batch_size] for i in range(0, len(client_ids), batch_size)]
-        chunks = await asyncio.gather(
-            *[client.get_active_memberships_bulk(batch) for batch in batches],
-            return_exceptions=True,
-        )
+        sem = asyncio.Semaphore(3)
+
+        async def _fetch(batch: list[str]):
+            async with sem:
+                return await client.get_active_memberships_bulk(batch)
+
+        chunks = await asyncio.gather(*[_fetch(b) for b in batches], return_exceptions=True)
     finally:
         await client.close()
 
     result: dict[str, list[dict]] = {}
     for batch, chunk in zip(batches, chunks, strict=True):
         if isinstance(chunk, Exception):
-            logger.warning("Bulk membership fetch failed for batch of %d — skipping", len(batch))
+            logger.warning("Bulk membership fetch failed for batch of %d — skipping: %s", len(batch), chunk)
         else:
             result.update(chunk)
     return result
@@ -268,15 +271,25 @@ async def upsert_mindbody_users_batch(members: list[dict]) -> int:
         })
     if not rows:
         return 0
+    # Deduplicate by mindbody_id — API can return duplicates; ON CONFLICT DO UPDATE
+    # raises CardinalityViolationError if the same row appears twice in one statement.
+    seen: dict[str, dict] = {}
+    for row in rows:
+        seen[row["mindbody_id"]] = row
+    rows = list(seen.values())
     from sqlalchemy.dialects.postgresql import insert as _insert
-    stmt = _insert(MindBodyClientModel).values(rows)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["mindbody_id"],
-        set_={k: stmt.excluded[k] for k in rows[0] if k != "mindbody_id"},
-    )
+    # asyncpg caps bind parameters at 32767; chunk to stay safely under that limit
+    chunk_size = 32767 // len(rows[0])
     async with _get_async_session_factory()() as db:
         try:
-            await db.execute(stmt)
+            for i in range(0, len(rows), chunk_size):
+                chunk = rows[i : i + chunk_size]
+                stmt = _insert(MindBodyClientModel).values(chunk)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["mindbody_id"],
+                    set_={k: stmt.excluded[k] for k in chunk[0] if k != "mindbody_id"},
+                )
+                await db.execute(stmt)
             await db.commit()
         except Exception:
             await db.rollback()
