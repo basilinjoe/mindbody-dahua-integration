@@ -7,9 +7,8 @@ Start with:
 On startup:
  1. Registers MindBodyCredentials block type with Prefect server
  2. Creates per-device concurrency limits (max 2 concurrent calls per device)
- 3. Starts prefect serve() with 3 deployments:
+ 3. Starts prefect serve() with 2 deployments:
     - sync-integration/full         (every N minutes, full reconciliation)
-    - sync-member/default           (webhook/manual trigger)
     - device-health/scheduled       (every M minutes, health check)
 """
 
@@ -29,7 +28,6 @@ from app.models.device import DahuaDevice
 from app.sync.blocks import MindBodyCredentials
 from app.sync.flows.health import device_health_flow
 from app.sync.flows.integration import sync_integration_flow
-from app.sync.flows.member import sync_member_flow
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +53,6 @@ async def _sync_variables_from_env() -> None:
     mapping = {
         "SYNC_INTERVAL_MINUTES": "sync_interval_minutes",
         "HEALTH_INTERVAL_MINUTES": "health_interval_minutes",
-        "PHOTO_MAX_SIZE_KB": "photo_max_size_kb",
     }
     for env_key, var_name in mapping.items():
         value = os.environ.get(env_key)
@@ -144,11 +141,6 @@ async def main() -> None:
     interval, health_interval = await _setup()
 
     await aserve(
-        # Webhook/manual trigger: single member sync
-        await sync_member_flow.ato_deployment(
-            name="default",
-            tags=["webhook"],
-        ),
         # Full sync — every N minutes
         await sync_integration_flow.ato_deployment(
             name="full",
