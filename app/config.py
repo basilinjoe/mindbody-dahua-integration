@@ -28,12 +28,12 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = 30
     device_health_interval_minutes: int = 5
     log_level: str = "INFO"
-    photo_max_size_kb: int = 190
 
     # -- Admin UI --
     admin_username: str = "admin"
-    admin_password: str = "changeme"
-    secret_key: str = "change-this-to-a-random-secret-key"
+    admin_password: str
+    secret_key: str
     session_expire_hours: int = 8
+    secure_cookies: bool = True
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

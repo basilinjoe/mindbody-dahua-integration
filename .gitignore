@@ -32,3 +32,4 @@ htmlcov/
 # Env variants
 .env.*
 !.env.example
+sdk/

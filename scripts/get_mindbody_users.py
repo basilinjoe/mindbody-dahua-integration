@@ -117,7 +117,6 @@ def format_client(c: dict) -> str:
         f"Gender      : {c.get('Gender', 'N/A')}",
         f"Created     : {c.get('CreationDate', 'N/A')}",
         f"Last visit  : {c.get('LastFormulaNotes', c.get('LastModifiedDateTime', 'N/A'))}",
-        f"Photo URL   : {c.get('PhotoUrl', 'N/A')}",
     ]
     return "\n".join(lines)
 

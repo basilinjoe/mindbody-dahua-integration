@@ -9,15 +9,6 @@ from app.utils.hmac_verify import verify_mindbody_signature
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
-# MindBody event types that indicate a membership change
-RELEVANT_EVENTS = {
-    "client.created",
-    "client.updated",
-    "clientContract.created",
-    "clientContract.updated",
-    "sale.completed",
-}
-
 
 @router.head("/mindbody")
 async def mindbody_webhook_validation():

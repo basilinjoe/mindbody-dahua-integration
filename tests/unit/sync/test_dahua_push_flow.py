@@ -64,16 +64,14 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         assert run_id == "run-1"
         return items
 
-    async def fake_enroll_on_device(device_id: int, member: dict, photo_max_kb: int):  # noqa: ANN202
+    async def fake_enroll_on_device(device_id: int, member: dict) -> bool:
         assert device_id == 10
         assert member["Id"] == "101"
-        assert photo_max_kb == 180
         return True
 
-    async def fake_deactivate_on_device(device_id: int, dahua_user_id: str, enrollment_id: int):  # noqa: ANN202
+    async def fake_deactivate_on_device(device_id: int, dahua_user_id: str) -> bool:  # noqa: ANN202
         assert device_id == 10
         assert dahua_user_id == "102"
-        assert enrollment_id == 77
         return False
 
     async def fake_reactivate_on_device(*_args, **_kwargs):  # noqa: ANN002, ANN003, ANN202
@@ -114,7 +112,7 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
     monkeypatch.setattr(dahua_push_mod, "mark_queue_item", fake_mark_queue_item)
     monkeypatch.setattr(dahua_push_mod, "create_table_artifact", fake_create_table_artifact)
 
-    stats = await dahua_push_mod.sync_dahua_push_flow.fn(run_id="run-1", photo_max_kb=180)
+    stats = await dahua_push_mod.sync_dahua_push_flow.fn(run_id="run-1")
 
     assert stats == {
         "enrolled": 1,
@@ -128,7 +126,7 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         "dahua_user_id": "101",
         "valid_start": "2026-01-01 00:00:00",
         "valid_end": "2026-12-31 23:59:59",
-        "enrollment_id": 55,
+        "enrollment_id": None,
     }
 
     by_id = {item_id: (status, error) for item_id, status, error in marks}

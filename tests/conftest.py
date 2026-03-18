@@ -30,6 +30,7 @@ def settings() -> Settings:
         admin_username="admin",
         admin_password="changeme",
         secret_key="unit-test-secret-key",
+        secure_cookies=False,
         sync_interval_minutes=30,
         device_health_interval_minutes=5,
         log_level="INFO",

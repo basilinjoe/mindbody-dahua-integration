@@ -57,6 +57,7 @@ async def login_submit(request: Request):
                 token,
                 httponly=True,
                 samesite="lax",
+                secure=request.app.state.settings.secure_cookies,
                 max_age=request.app.state.settings.session_expire_hours * 3600,
             )
             logger.info("Admin login: %s", username)

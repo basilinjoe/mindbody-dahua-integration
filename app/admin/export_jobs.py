@@ -40,7 +40,6 @@ def _build_mindbody_csv(clients: list[dict]) -> str:
         "birth_date",
         "gender",
         "created_at",
-        "photo_url",
     ]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
@@ -60,7 +59,6 @@ def _build_mindbody_csv(clients: list[dict]) -> str:
                 "birth_date": c.get("BirthDate", ""),
                 "gender": c.get("Gender", ""),
                 "created_at": c.get("CreationDate", ""),
-                "photo_url": c.get("PhotoUrl", ""),
             }
         )
     return buf.getvalue()

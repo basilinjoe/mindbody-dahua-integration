@@ -115,7 +115,6 @@
             <th class="text-left px-3 py-2 font-medium text-gray-500">
               <a href="{{ sort_url('last_modified_at_mb') }}" class="hover:text-gray-900">Modified {{ sort_icon('last_modified_at_mb') }}</a>
             </th>
-            <th class="text-left px-3 py-2 font-medium text-gray-500">Photo</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
@@ -163,11 +162,6 @@
             </td>
             <td class="px-3 py-1.5 text-gray-500">{{ client.created_at_mb or '—' }}</td>
             <td class="px-3 py-1.5 text-gray-500">{{ client.last_modified_at_mb or '—' }}</td>
-            <td class="px-3 py-1.5">
-              {% if client.photo_url %}
-              <a href="{{ client.photo_url }}" target="_blank" class="text-blue-500 hover:underline">View</a>
-              {% else %}<span class="text-gray-300">—</span>{% endif %}
-            </td>
           </tr>
           {% endfor %}
           {% if not clients %}

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -42,7 +42,7 @@ class MindBodyClient:
         data = resp.json()
         self._token = data["AccessToken"]
         # MindBody tokens are typically valid for ~24h; refresh a bit early
-        self._token_expiry = datetime.now(UTC).replace(hour=23, minute=0)
+        self._token_expiry = datetime.now(UTC) + timedelta(hours=23)
         return self._token
 
     def _headers(self) -> dict[str, str]:
@@ -166,11 +166,3 @@ class MindBodyClient:
 
         return False
 
-    async def get_client_photo_url(self, client_id: str) -> str | None:
-        """Get the photo URL for a specific client."""
-        clients = await self.get_clients(search_text=client_id, limit=1)
-        if clients:
-            url = clients[0].get("PhotoUrl")
-            if url and "default" not in url.lower():
-                return url
-        return None

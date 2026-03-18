@@ -30,7 +30,6 @@ class MindBodyClient(Base):
     gender: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at_mb: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_modified_at_mb: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    photo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     last_fetched_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )

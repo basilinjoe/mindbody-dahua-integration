@@ -22,7 +22,6 @@ def test_plan_device_operations_creates_all_action_types() -> None:
             "FirstName": "Alex",
             "LastName": "One",
             "Gender": "male",
-            "PhotoUrl": "https://img/101",
             "Email": "101@x.com",
         },
         "102": {
@@ -30,7 +29,6 @@ def test_plan_device_operations_creates_all_action_types() -> None:
             "FirstName": "Blair",
             "LastName": "Two",
             "Gender": "male",
-            "PhotoUrl": "https://img/102",
             "Email": "102@x.com",
         },
         "104": {
@@ -38,7 +36,6 @@ def test_plan_device_operations_creates_all_action_types() -> None:
             "FirstName": "Casey",
             "LastName": "Four",
             "Gender": "male",
-            "PhotoUrl": "https://img/104",
             "Email": "104@x.com",
         },
     }

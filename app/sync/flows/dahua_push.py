@@ -21,7 +21,7 @@ from app.sync.tasks import (
 logger = logging.getLogger(__name__)
 
 
-async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
+async def run_dahua_push(run_id: str, flow_logger) -> dict:
     """
     Core push logic — can be called directly from another flow to avoid
     Prefect subflow tracking (which requires matching client/server versions).
@@ -63,7 +63,7 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
         try:
             if item.action == "enroll":
                 member = json.loads(item.member_snapshot or "{}")
-                result = await enroll_on_device(item.device_id, member, photo_max_kb)
+                result = await enroll_on_device(item.device_id, member)
                 success = bool(result)
             elif item.action == "deactivate":
                 success = await deactivate_on_device(item.device_id, item.dahua_user_id)
@@ -132,6 +132,6 @@ async def run_dahua_push(run_id: str, photo_max_kb: int, flow_logger) -> dict:
 
 
 @flow(name="sync-dahua-push", log_prints=True)
-async def sync_dahua_push_flow(run_id: str, photo_max_kb: int = 200) -> dict:
+async def sync_dahua_push_flow(run_id: str) -> dict:
     """Standalone flow wrapper — delegates to run_dahua_push."""
-    return await run_dahua_push(run_id, photo_max_kb, get_run_logger())
+    return await run_dahua_push(run_id, get_run_logger())

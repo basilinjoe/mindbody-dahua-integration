@@ -6,8 +6,9 @@ import hmac
 from app.utils.hmac_verify import verify_mindbody_signature
 
 
-def test_verify_signature_returns_true_when_key_not_configured() -> None:
-    assert verify_mindbody_signature(b"payload", "anything", "") is True
+def test_verify_signature_returns_false_when_key_not_configured() -> None:
+    """No key means fail closed — reject all requests."""
+    assert verify_mindbody_signature(b"payload", "anything", "") is False
 
 
 def test_verify_signature_valid_hmac() -> None:

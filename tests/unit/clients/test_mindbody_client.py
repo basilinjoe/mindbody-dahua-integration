@@ -18,6 +18,7 @@ def _settings() -> Settings:
         mindbody_username="user",
         mindbody_password="pass",
         secret_key="test",
+        admin_password="test",
     )
 
 
@@ -148,19 +149,3 @@ async def test_is_member_active_false_for_invalid_dates_and_no_entitlements() ->
         await mb.close()
 
 
-@pytest.mark.asyncio
-async def test_get_client_photo_url_ignores_default_photo(monkeypatch: pytest.MonkeyPatch) -> None:
-    settings = _settings()
-    mb = MindBodyClient(settings)
-
-    async def fake_get_clients(
-        *, limit: int = 200, offset: int = 0, search_text: str = ""
-    ) -> list[dict]:
-        assert search_text == "99"
-        return [{"Id": 99, "PhotoUrl": "https://example.test/default-avatar.jpg"}]
-
-    monkeypatch.setattr(mb, "get_clients", fake_get_clients)
-    try:
-        assert await mb.get_client_photo_url("99") is None
-    finally:
-        await mb.close()

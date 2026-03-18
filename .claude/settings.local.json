@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python c:/Projects/mind-body-dahua/.claude/hooks/ruff_check.py"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(printf:*)",
@@ -35,7 +22,34 @@
       "Bash(python -m pytest tests/ -q --tb=short)",
       "Bash(docker compose:*)",
       "Bash(python -m pytest tests/ -v --tb=short)",
-      "Bash(python -m pytest tests/unit/admin/ tests/unit/sync/test_integration_plan_group.py -q)"
+      "Bash(python -m pytest tests/unit/admin/ tests/unit/sync/test_integration_plan_group.py -q)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "Bash(curl -s http://localhost:54370)",
+      "Bash(python -m pytest tests/unit/admin/test_dashboard_stats.py -v)",
+      "Bash(python -m pytest --co -q tests/unit/admin/test_dashboard_stats.py)",
+      "Bash(pytest tests/unit/admin/test_dashboard_stats.py -v)",
+      "Bash(python -m pytest tests/unit/admin/test_device_user_count.py -v)",
+      "Bash(pytest -q)",
+      "Bash(python -m pytest tests/unit/admin/ -v)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python c:/Projects/mind-body-dahua/.claude/hooks/ruff_check.py"
+          },
+          {
+            "type": "agent",
+            "prompt": "A file was just modified. Review ONLY that file for code quality, reuse, and efficiency. Simplify and refine it for clarity, consistency, and maintainability while preserving all functionality. Do not change behaviour — only improve structure and readability. The modified file path is in: $ARGUMENTS",
+            "statusMessage": "Simplifying code...",
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, func
 
 from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.device import DahuaDevice
@@ -127,8 +127,7 @@ def _get_device_rows(db) -> list[dict]:
             func.count(case((DahuaSyncQueue.status == "pending", 1))).label("pending"),
             func.count(
                 case((
-                    (DahuaSyncQueue.status == "failed")
-                    & (DahuaSyncQueue.created_at >= cutoff),
+                    and_(DahuaSyncQueue.status == "failed", DahuaSyncQueue.created_at >= cutoff),
                     1,
                 ))
             ).label("failed_24h"),

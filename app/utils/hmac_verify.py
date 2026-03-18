@@ -12,7 +12,7 @@ def verify_mindbody_signature(body: bytes, signature: str, signature_key: str) -
     The signature_key is provided when creating a webhook subscription.
     """
     if not signature_key:
-        return True  # Skip verification if no key configured
+        return False  # Fail closed — no key means no valid signature
     expected = hmac.new(
         signature_key.encode("utf-8"),
         body,

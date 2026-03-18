@@ -37,7 +37,7 @@ async def device_health_flow() -> None:
                 .where(DahuaDevice.id == device.id)
                 .values(
                     status=status,
-                    last_seen_at=datetime.utcnow() if status == "online" else None,
+                    last_seen_at=datetime.now(UTC).replace(tzinfo=None) if status == "online" else None,
                 )
             )
             await db.commit()

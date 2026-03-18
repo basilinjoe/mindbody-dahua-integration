@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections import Counter
 from datetime import UTC, datetime
 from uuid import uuid4
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
-from prefect.variables import Variable
 
 from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
@@ -39,29 +39,32 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     5. Write operations to dahua_sync_queue and execute against devices
     """
     flow_logger = get_run_logger()
-    photo_max_kb = int(await Variable.get("photo_max_size_kb", default="200"))
     run_id = str(uuid4())
     run_started_at = datetime.now(UTC)
     flow_logger.info("Integration sync started (run_id=%s)", run_id)
 
     # ── Step 1: Fetch from MindBody ────────────────────────────────────────────
     all_members = await fetch_members(modified_after=None)
-    members = [m for m in all_members if m.get("Active")]
-    flow_logger.info("Fetched %d members from MindBody (%d active)", len(all_members), len(members))
+    active_members_from_api = [m for m in all_members if m.get("Active")]
+    flow_logger.info("Fetched %d members from MindBody (%d active)", len(all_members), len(active_members_from_api))
 
-    if not members:
-        flow_logger.info("No active members to process")
+    if not all_members:
+        flow_logger.info("No members fetched from MindBody")
         return
 
-    client_ids = [str(m["Id"]) for m in members if m.get("Id")]
-
-    # Upsert users + fetch memberships in parallel, then upsert memberships
+    # Upsert ALL members (including inactive) so the DB reflects current active status.
+    # Only fetch memberships for active members to avoid unnecessary API calls.
+    active_client_ids = [str(m["Id"]) for m in active_members_from_api if m.get("Id")]
     _, memberships_by_client = await asyncio.gather(
-        upsert_mindbody_users_batch(members),
-        fetch_all_memberships(client_ids),
+        upsert_mindbody_users_batch(all_members),
+        fetch_all_memberships(active_client_ids),
     )
     await upsert_mindbody_memberships_batch(memberships_by_client)
-    flow_logger.info("Upserted %d clients and their memberships to local DB", len(members))
+    flow_logger.info(
+        "Upserted %d clients to local DB (%d active, memberships fetched for active)",
+        len(all_members),
+        len(active_members_from_api),
+    )
 
     # ── Step 2: Load active candidates from DB ─────────────────────────────────
     # Only members marked active in MindBody AND with an active membership qualify.
@@ -86,7 +89,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     )
 
     # ── Step 3: Load devices + membership windows in parallel ──────────────────
-    all_active_ids = list(active_male_ids | active_female_ids)
+    all_active_ids = list(member_map.keys())
     (male_device_ids, female_device_ids), membership_windows = await asyncio.gather(
         asyncio.gather(
             load_device_ids_by_gate_type("male"),
@@ -122,49 +125,31 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     # ── Step 5: Plan operations for each device ────────────────────────────────
     all_items: list[dict] = []
 
-    for device_id in male_device_ids:
-        items = _plan_device_operations(
-            device_id=device_id,
-            active_member_ids=active_male_ids,
-            member_map=member_map,
-            dahua_users=dahua_users_by_device.get(device_id, []),
-            membership_windows=membership_windows,
-        )
-        flow_logger.info(
-            "Device %d (male): enroll=%d deactivate=%d reactivate=%d update_window=%d",
-            device_id,
-            sum(1 for i in items if i["action"] == "enroll"),
-            sum(1 for i in items if i["action"] == "deactivate"),
-            sum(1 for i in items if i["action"] == "reactivate"),
-            sum(1 for i in items if i["action"] == "update_window"),
-        )
-        all_items.extend(items)
+    for gate_label, device_ids, active_ids in [
+        ("male", male_device_ids, active_male_ids),
+        ("female", female_device_ids, active_female_ids),
+    ]:
+        for device_id in device_ids:
+            items = _plan_device_operations(
+                device_id=device_id,
+                active_member_ids=active_ids,
+                member_map=member_map,
+                dahua_users=dahua_users_by_device.get(device_id, []),
+                membership_windows=membership_windows,
+            )
+            c = Counter(i["action"] for i in items)
+            flow_logger.info(
+                "Device %d (%s): enroll=%d deactivate=%d reactivate=%d update_window=%d",
+                device_id, gate_label,
+                c["enroll"], c["deactivate"], c["reactivate"], c["update_window"],
+            )
+            all_items.extend(items)
 
-    for device_id in female_device_ids:
-        items = _plan_device_operations(
-            device_id=device_id,
-            active_member_ids=active_female_ids,
-            member_map=member_map,
-            dahua_users=dahua_users_by_device.get(device_id, []),
-            membership_windows=membership_windows,
-        )
-        flow_logger.info(
-            "Device %d (female): enroll=%d deactivate=%d reactivate=%d update_window=%d",
-            device_id,
-            sum(1 for i in items if i["action"] == "enroll"),
-            sum(1 for i in items if i["action"] == "deactivate"),
-            sum(1 for i in items if i["action"] == "reactivate"),
-            sum(1 for i in items if i["action"] == "update_window"),
-        )
-        all_items.extend(items)
-
+    total = Counter(i["action"] for i in all_items)
     flow_logger.info(
         "Total planned: %d operations — enroll=%d deactivate=%d reactivate=%d update_window=%d",
         len(all_items),
-        sum(1 for i in all_items if i["action"] == "enroll"),
-        sum(1 for i in all_items if i["action"] == "deactivate"),
-        sum(1 for i in all_items if i["action"] == "reactivate"),
-        sum(1 for i in all_items if i["action"] == "update_window"),
+        total["enroll"], total["deactivate"], total["reactivate"], total["update_window"],
     )
 
     if not all_items:
@@ -174,7 +159,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     # ── Step 6: Write queue + execute ─────────────────────────────────────────
     await write_sync_queue_batch(run_id, all_items)
 
-    push_stats = await run_dahua_push(run_id, photo_max_kb, flow_logger)
+    push_stats = await run_dahua_push(run_id, flow_logger)
 
     await create_table_artifact(
         key="sync-results",
@@ -232,7 +217,6 @@ def _plan_device_operations(
                             "FirstName": m.get("FirstName", ""),
                             "LastName": m.get("LastName", ""),
                             "Gender": m.get("Gender"),
-                            "PhotoUrl": m.get("PhotoUrl"),
                             "Email": m.get("Email"),
                             "valid_start": new_valid_start,
                             "valid_end": new_valid_end,
