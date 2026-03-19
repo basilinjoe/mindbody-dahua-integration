@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from prefect import task
 from prefect.cache_policies import INPUTS
 from prefect.concurrency.asyncio import concurrency
-from sqlalchemy import delete, exists, select, update
+from sqlalchemy import select
 
 from app.clients.dahua import DahuaClient
 from app.clients.mindbody import MINDBODY_PAGE_SIZE, MindBodyClient
@@ -17,7 +17,10 @@ from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.database import _get_async_session_factory
 from app.models.device import DahuaDevice
 from app.models.mindbody_client import MindBodyClient as MindBodyClientModel
-from app.models.mindbody_membership import MindBodyMembership
+from app.services import devices as devices_svc
+from app.services import members as members_svc
+from app.services import memberships as memberships_svc
+from app.services import queue as queue_svc
 from app.sync.blocks import MindBodyCredentials
 
 logger = logging.getLogger(__name__)
@@ -60,8 +63,9 @@ def _settings_from_creds(creds: MindBodyCredentials) -> Settings:
 async def _get_dahua_client(device_id: int) -> tuple[DahuaClient, DahuaDevice]:
     """Load device credentials from DB and create a DahuaClient. Not a task."""
     async with _get_async_session_factory()() as db:
-        result = await db.execute(select(DahuaDevice).where(DahuaDevice.id == device_id))
-        device = result.scalar_one()
+        device = await devices_svc.get_by_id(db, device_id)
+        if device is None:
+            raise ValueError(f"Device {device_id} not found")
     return (
         DahuaClient(
             host=device.host,
@@ -117,23 +121,9 @@ async def fetch_members(modified_since: datetime | None = None) -> list[dict]:
 
 @task(name="load-device-ids-by-gate-type", tags=["db"])
 async def load_device_ids_by_gate_type(gate_type: str) -> list[int]:
-    """
-    Return IDs of enabled devices matching gate_type.
-    gate_type="all" returns ALL enabled devices with integration enabled.
-    Otherwise returns devices where gate_type matches exactly.
-    """
+    """Return IDs of enabled devices matching gate_type."""
     async with _get_async_session_factory()() as db:
-        stmt = (
-            select(DahuaDevice.id)
-            .where(DahuaDevice.is_enabled.is_(True))
-            .where(DahuaDevice.enable_integration.is_(True))
-        )
-        if gate_type != "all":
-            stmt = stmt.where(
-                (DahuaDevice.gate_type == gate_type) | (DahuaDevice.gate_type == "all")
-            )
-        result = await db.execute(stmt)
-        return [row[0] for row in result.fetchall()]
+        return await devices_svc.list_by_gate_type(db, gate_type)
 
 
 # ── Dahua tasks ─────────────────────────────────────────────────────────────────
@@ -191,8 +181,7 @@ async def check_device_health_task(device_id: int) -> bool:
 async def load_all_devices() -> list[DahuaDevice]:
     """Return all enabled Dahua devices for health check."""
     async with _get_async_session_factory()() as db:
-        result = await db.execute(select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True)))
-        return list(result.scalars().all())
+        return await devices_svc.list_all(db)
 
 
 # ── MindBody user + membership persistence tasks ────────────────────────────────
@@ -241,112 +230,16 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
 
 @task(name="upsert-mindbody-users-batch", tags=["db"])
 async def upsert_mindbody_users_batch(members: list[dict]) -> int:
-    """
-    Upsert MindBody user details into the mindbody_clients table.
-    Uses a single INSERT … ON CONFLICT DO UPDATE instead of per-row SELECT + INSERT/UPDATE.
-    Returns count of rows processed.
-    """
-    now = datetime.now(UTC).replace(tzinfo=None)
-    rows = []
-    for m in members:
-        mid = str(m.get("Id", "")).strip()
-        if not mid:
-            continue
-        rows.append({
-            "mindbody_id": mid,
-            "unique_id": str(m["UniqueId"]) if m.get("UniqueId") is not None else None,
-            "first_name": m.get("FirstName", ""),
-            "last_name": m.get("LastName", ""),
-            "email": m.get("Email"),
-            "mobile_phone": m.get("MobilePhone"),
-            "home_phone": m.get("HomePhone"),
-            "work_phone": m.get("WorkPhone"),
-            "status": m.get("Status"),
-            "active": bool(m.get("Active", False)),
-            "birth_date": m.get("BirthDate"),
-            "gender": m.get("Gender"),
-            "created_at_mb": m.get("CreationDate"),
-            "last_modified_at_mb": m.get("LastModifiedDateTime"),
-            "last_fetched_at": now,
-        })
-    if not rows:
-        return 0
-    # Deduplicate by mindbody_id — API can return duplicates; ON CONFLICT DO UPDATE
-    # raises CardinalityViolationError if the same row appears twice in one statement.
-    seen: dict[str, dict] = {}
-    for row in rows:
-        seen[row["mindbody_id"]] = row
-    rows = list(seen.values())
-    from sqlalchemy.dialects.postgresql import insert as _insert
-    # asyncpg caps bind parameters at 32767; chunk to stay safely under that limit
-    chunk_size = 32767 // len(rows[0])
+    """Upsert MindBody user details into the mindbody_clients table. Returns rows written."""
     async with _get_async_session_factory()() as db:
-        try:
-            for i in range(0, len(rows), chunk_size):
-                chunk = rows[i : i + chunk_size]
-                stmt = _insert(MindBodyClientModel).values(chunk)
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=["mindbody_id"],
-                    set_={k: stmt.excluded[k] for k in chunk[0] if k != "mindbody_id"},
-                )
-                await db.execute(stmt)
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception("Failed to upsert mindbody users batch")
-            return 0
-    return len(rows)
+        return await members_svc.upsert_batch(db, members)
 
 
 @task(name="upsert-mindbody-memberships-batch", tags=["db"])
 async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, list[dict]]) -> int:
-    """
-    Upsert membership rows into mindbody_memberships.
-    Deletes all existing rows for the given clients in one query, then bulk-inserts fresh ones.
-    Returns total rows inserted.
-    """
-    now_utc = datetime.now(UTC)
-    now = now_utc.replace(tzinfo=None)  # naive UTC for TIMESTAMP WITHOUT TIME ZONE columns
-
-    new_rows: list[MindBodyMembership] = []
-    for client_id, memberships in memberships_by_client.items():
-        for mb in memberships:
-            exp_str = mb.get("ExpirationDate")
-            is_active = True
-            if exp_str:
-                try:
-                    exp_dt = datetime.fromisoformat(exp_str.replace("Z", "+00:00"))
-                    is_active = exp_dt > now_utc
-                except (ValueError, TypeError):
-                    pass
-            new_rows.append(
-                MindBodyMembership(
-                    mindbody_client_id=client_id,
-                    membership_id=str(mb.get("Id", "") or ""),
-                    membership_name=mb.get("Name"),
-                    status=mb.get("Status"),
-                    start_date=mb.get("StartDate"),
-                    expiration_date=exp_str,
-                    is_active=is_active,
-                    last_synced_at=now,
-                )
-            )
-
-    client_ids = list(memberships_by_client.keys())
+    """Upsert memberships for each client. Returns total rows written."""
     async with _get_async_session_factory()() as db:
-        try:
-            await db.execute(
-                delete(MindBodyMembership).where(
-                    MindBodyMembership.mindbody_client_id.in_(client_ids)
-                )
-            )
-            db.add_all(new_rows)
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception("Failed to upsert memberships batch")
-            return 0
-    return len(new_rows)
+        return await memberships_svc.upsert_batch(db, memberships_by_client)
 
 
 # ── Dahua sync queue tasks ───────────────────────────────────────────────────────
@@ -354,138 +247,40 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
 
 @task(name="write-sync-queue-batch", tags=["db"])
 async def write_sync_queue_batch(run_id: str, items: list[dict]) -> int:
-    """
-    Insert a batch of planned Dahua operations into dahua_sync_queue with status='pending'.
-    Each item dict must have: device_id, mindbody_client_id, action,
-    and optionally: member_snapshot, dahua_user_id, enrollment_id.
-    Returns count of rows inserted.
-    """
+    """Insert a batch of planned Dahua operations into dahua_sync_queue. Returns rows inserted."""
     async with _get_async_session_factory()() as db:
-        db.add_all([
-            DahuaSyncQueue(
-                run_id=run_id,
-                device_id=item["device_id"],
-                mindbody_client_id=item["mindbody_client_id"],
-                action=item["action"],
-                status="pending",
-                member_snapshot=item.get("member_snapshot"),
-                dahua_user_id=item.get("dahua_user_id"),
-                enrollment_id=item.get("enrollment_id"),
-            )
-            for item in items
-        ])
-        try:
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception("Failed to write sync queue batch (run_id=%s)", run_id)
-            return 0
-    return len(items)
+        return await queue_svc.write_batch(db, run_id, items)
 
 
 @task(name="load-pending-queue-items", tags=["db"])
 async def load_pending_queue_items(run_id: str) -> list[DahuaSyncQueue]:
-    """
-    Load all actionable queue items for a given run_id.
-    Includes both 'pending' (not yet attempted) and 'failed' (eligible for retry).
-    Returns detached ORM objects (session is closed after load).
-    """
+    """Load pending queue items for a given run_id."""
     async with _get_async_session_factory()() as db:
-        result = await db.execute(
-            select(DahuaSyncQueue)
-            .where(DahuaSyncQueue.run_id == run_id)
-            .where(DahuaSyncQueue.status.in_(["pending", "failed"]))
-        )
-        items = list(result.scalars().all())
-        # Expunge so objects can be used outside the session
-        for item in items:
-            db.expunge(item)
-        return items
+        return await queue_svc.load_pending(db, run_id)
 
 
 @task(name="mark-queue-item", tags=["db"])
 async def mark_queue_item(item_id: int, status: str, error_message: str | None = None) -> None:
-    """Update status, error_message, and processed_at for a single queue item."""
+    """Update status and error_message for a single queue item."""
     async with _get_async_session_factory()() as db:
-        await db.execute(
-            update(DahuaSyncQueue)
-            .where(DahuaSyncQueue.id == item_id)
-            .values(
-                status=status,
-                error_message=error_message,
-                processed_at=datetime.now(UTC),
-            )
-        )
-        await db.commit()
+        await queue_svc.mark_item(db, item_id, status, error_message)
 
 
 # ── Access window tasks ──────────────────────────────────────────────────────────
 
 
 @task(name="load-membership-windows", tags=["db"])
-async def load_membership_windows(
-    client_ids: list[str],
-) -> dict[str, tuple[str | None, str | None]]:
-    """
-    For each client_id, return (start_date, expiration_date) of their best active
-    membership from mindbody_memberships. NULL expiration_date (ongoing) is preferred.
-    Returns {client_id: (start_date, expiration_date)}.
-    """
-    result_map: dict[str, tuple[str | None, str | None]] = {}
-    if not client_ids:
-        return result_map
-
+async def load_membership_windows(client_ids: list[str]) -> dict[str, dict]:
+    """Return {client_id: {valid_start, valid_end}} for active memberships."""
     async with _get_async_session_factory()() as db:
-        rows = await db.execute(
-            select(MindBodyMembership.mindbody_client_id, MindBodyMembership.start_date, MindBodyMembership.expiration_date)
-            .where(MindBodyMembership.mindbody_client_id.in_(client_ids))
-            .where(MindBodyMembership.is_active.is_(True))
-        )
-        for cid, start, expiry in rows.fetchall():
-            existing = result_map.get(cid)
-            # Prefer NULL expiry (ongoing) over dated; among dated, prefer latest
-            if existing is None:
-                result_map[cid] = (start, expiry)
-            elif expiry is None:
-                result_map[cid] = (start, None)  # ongoing wins
-            elif existing[1] is not None and expiry > existing[1]:
-                result_map[cid] = (start, expiry)  # later expiry wins
-
-    return result_map
+        return await memberships_svc.load_windows(db, client_ids)
 
 
 @task(name="load-active-members-from-db", tags=["db"])
-async def load_active_members_from_db() -> list[dict]:
-    """
-    Return all MindBody clients that are active AND have at least one active membership
-    in the local DB. Shaped as API-compatible dicts (Id, FirstName, LastName, Gender,
-    PhotoUrl, Email) so they slot directly into the existing enroll snapshot format.
-    """
-    stmt = (
-        select(MindBodyClientModel)
-        .where(MindBodyClientModel.active.is_(True))
-        .where(
-            exists(
-                select(MindBodyMembership.id)
-                .where(MindBodyMembership.mindbody_client_id == MindBodyClientModel.mindbody_id)
-                .where(MindBodyMembership.is_active.is_(True))
-                .correlate(MindBodyClientModel)
-            )
-        )
-    )
+async def load_active_members_from_db() -> list[MindBodyClientModel]:
+    """Return all MindBody clients that are active and have an active membership."""
     async with _get_async_session_factory()() as db:
-        result = await db.execute(stmt)
-        rows = list(result.scalars().all())
-    return [
-        {
-            "Id": row.mindbody_id,
-            "FirstName": row.first_name,
-            "LastName": row.last_name,
-            "Gender": row.gender,
-            "Email": row.email,
-        }
-        for row in rows
-    ]
+        return await members_svc.load_active(db)
 
 
 @task(name="fetch-dahua-users-for-device", retries=2, retry_delay_seconds=15, tags=["dahua"])
