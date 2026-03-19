@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin_user import AdminUser
+from app.api.deps import get_async_db
+from app.services import admin_users
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,31 +41,30 @@ async def login_page(request: Request):
 
 
 @router.post("/login")
-async def login_submit(request: Request):
+async def login_submit(
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
     templates = request.app.state.templates
     form = await request.form()
     username = form.get("username", "")
     password = form.get("password", "")
 
-    db = request.app.state.db_session_factory()
-    try:
-        user = db.query(AdminUser).filter_by(username=username, is_active=True).first()
-        if user and user.verify_password(password):
-            s = _serializer(request)
-            token = s.dumps({"username": username})
-            response = RedirectResponse(url="/admin/", status_code=303)
-            response.set_cookie(
-                "session",
-                token,
-                httponly=True,
-                samesite="lax",
-                secure=request.app.state.settings.secure_cookies,
-                max_age=request.app.state.settings.session_expire_hours * 3600,
-            )
-            logger.info("Admin login: %s", username)
-            return response
-    finally:
-        db.close()
+    user = await admin_users.get_by_username(db, username)
+    if user and user.verify_password(password):
+        s = _serializer(request)
+        token = s.dumps({"username": username})
+        response = RedirectResponse(url="/admin/", status_code=303)
+        response.set_cookie(
+            "session",
+            token,
+            httponly=True,
+            samesite="lax",
+            secure=request.app.state.settings.secure_cookies,
+            max_age=request.app.state.settings.session_expire_hours * 3600,
+        )
+        logger.info("Admin login: %s", username)
+        return response
 
     return templates.TemplateResponse(
         request,
