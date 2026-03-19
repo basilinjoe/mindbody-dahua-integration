@@ -23,7 +23,9 @@ from prefect import aserve
 from prefect.client.orchestration import get_client
 from prefect.variables import Variable
 
-from app.models.database import init_async_db, init_db
+from sqlalchemy import select
+
+from app.models.database import init_async_db
 from app.models.device import DahuaDevice
 from app.sync.blocks import MindBodyCredentials
 from app.sync.flows.dahua_push import sync_dahua_push_flow
@@ -102,18 +104,13 @@ async def _setup() -> tuple[int, int]:
 
     database_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost/sync")
 
-    # Sync DB for reading device list
-    sync_factory = init_db(database_url)
-    db = sync_factory()
-    try:
-        device_ids = [
-            d.id for d in db.query(DahuaDevice).filter(DahuaDevice.is_enabled.is_(True)).all()
-        ]
-    finally:
-        db.close()
-
-    # Async DB for Prefect tasks
-    init_async_db(database_url)
+    # Async DB for Prefect tasks and device list query
+    async_factory = init_async_db(database_url)
+    async with async_factory() as db:
+        result = await db.execute(
+            select(DahuaDevice.id).where(DahuaDevice.is_enabled.is_(True))
+        )
+        device_ids = list(result.scalars().all())
 
     # Register block type with Prefect server
     try:

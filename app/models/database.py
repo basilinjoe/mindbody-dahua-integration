@@ -2,35 +2,22 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-
-# ── Sync engine (FastAPI routes + tests) ───────────────────────────────────────
-engine = None
-SessionLocal: sessionmaker[Session] | None = None
-
-# ── Async engine (Prefect tasks) ───────────────────────────────────────────────
-async_engine = None
-AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     pass
 
 
-def init_db(database_url: str) -> sessionmaker[Session]:
-    """Initialise the synchronous engine. Called by FastAPI lifespan."""
-    global engine, SessionLocal
-    engine = create_engine(database_url)
-    SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
-    Base.metadata.create_all(bind=engine)
-    return SessionLocal
+# ── Async engine (FastAPI routes + Prefect tasks) ────────────────────────────
+async_engine = None
+AsyncSessionLocal: async_sessionmaker[AsyncSession] | None = None
 
 
 def init_async_db(database_url: str) -> async_sessionmaker[AsyncSession]:
     """
-    Initialise the async engine for use by Prefect tasks.
+    Initialise the async engine.
 
     database_url should use an async driver, e.g.:
         postgresql+asyncpg://user:pass@host/db
@@ -57,17 +44,6 @@ def _to_async_url(url: str) -> str:
     return url  # already async or unknown
 
 
-def get_db():
-    """Sync dependency for FastAPI routes."""
-    if SessionLocal is None:
-        raise RuntimeError("Database not initialised. Call init_db() first.")
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     """Return AsyncSessionLocal, auto-initialising from DATABASE_URL env var if needed."""
     global AsyncSessionLocal
@@ -80,6 +56,6 @@ def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """Async dependency / context manager for Prefect tasks."""
+    """Async dependency for FastAPI routes."""
     async with _get_async_session_factory()() as session:
         yield session

@@ -2,19 +2,16 @@ from __future__ import annotations
 
 import json
 
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
 from app.main import _seed_admin, _seed_devices, create_app
 from app.models.admin_user import AdminUser
 from app.models.device import DahuaDevice
 
 
-def test_create_app_registers_stateful_routes_and_static(
-    settings, db_session_factory, fake_mindbody_client
-) -> None:
-    app = create_app(
-        settings=settings,
-        db_session_factory_override=db_session_factory,
-        mindbody_client_factory=lambda _: fake_mindbody_client,
-    )
+def test_create_app_registers_stateful_routes_and_static() -> None:
+    app = create_app()
 
     route_paths = {route.path for route in app.routes}
     assert "/health" in route_paths
@@ -22,48 +19,93 @@ def test_create_app_registers_stateful_routes_and_static(
     assert any(getattr(route, "path", None) == "/static" for route in app.routes)
 
 
-def test_seed_admin_creates_single_admin_user(settings, db_session_factory) -> None:
-    _seed_admin(db_session_factory, settings)
-    _seed_admin(db_session_factory, settings)
-
-    db = db_session_factory()
-    try:
-        users = db.query(AdminUser).all()
-        assert len(users) == 1
-        assert users[0].username == settings.admin_username
-    finally:
-        db.close()
-
-
-def test_seed_devices_supports_json_array(settings, db_session_factory) -> None:
-    settings.dahua_devices = json.dumps(
-        [
-            {"name": "Main Gate", "host": "10.0.0.10", "password": "a"},
-            {"name": "Side Gate", "host": "10.0.0.11", "password": "b", "door_ids": "0,1"},
-        ]
+@pytest.mark.asyncio
+async def test_seed_admin_creates_single_admin_user() -> None:
+    from app.config import Settings
+    settings = Settings(
+        mindbody_api_key="k", mindbody_site_id="s", mindbody_api_base_url="https://x",
+        mindbody_username="u", mindbody_password="p", mindbody_webhook_signature_key="wk",
+        dahua_devices="", dahua_default_host="", dahua_default_password="",
+        database_url="postgresql://localhost/test", admin_username="admin",
+        admin_password="changeme", secret_key="x",
     )
 
-    _seed_devices(db_session_factory, settings)
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    # First call: no admin exists → seed
+    mock_result_empty = MagicMock()
+    mock_result_empty.scalar_one_or_none.return_value = None
+    # Second call: admin exists → skip
+    mock_result_exists = MagicMock()
+    mock_result_exists.scalar_one_or_none.return_value = MagicMock(spec=AdminUser)
 
-    db = db_session_factory()
-    try:
-        devices = db.query(DahuaDevice).order_by(DahuaDevice.host).all()
-        assert [device.name for device in devices] == ["Main Gate", "Side Gate"]
-        assert devices[1].door_ids == "0,1"
-    finally:
-        db.close()
+    mock_db.execute = AsyncMock(side_effect=[mock_result_empty, mock_result_exists])
+    mock_db.commit = AsyncMock()
+
+    await _seed_admin(mock_db, settings)
+    mock_db.add.assert_called_once()
+    mock_db.commit.assert_called_once()
+
+    # Second call should not add another user
+    await _seed_admin(mock_db, settings)
+    # add still called only once total
+    mock_db.add.assert_called_once()
 
 
-def test_seed_devices_falls_back_to_default_host(settings, db_session_factory) -> None:
-    settings.dahua_default_host = "10.0.0.20"
-    settings.dahua_default_password = "pw"
+@pytest.mark.asyncio
+async def test_seed_devices_supports_json_array() -> None:
+    from app.config import Settings
+    settings = Settings(
+        mindbody_api_key="k", mindbody_site_id="s", mindbody_api_base_url="https://x",
+        mindbody_username="u", mindbody_password="p", mindbody_webhook_signature_key="wk",
+        dahua_default_host="", dahua_default_password="",
+        database_url="postgresql://localhost/test", admin_username="admin",
+        admin_password="changeme", secret_key="x",
+        dahua_devices=json.dumps([
+            {"name": "Main Gate", "host": "10.0.0.10", "password": "a"},
+            {"name": "Side Gate", "host": "10.0.0.11", "password": "b", "door_ids": "0,1"},
+        ]),
+    )
 
-    _seed_devices(db_session_factory, settings)
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    # Both devices are new (not in DB)
+    not_found = MagicMock()
+    not_found.scalar_one_or_none.return_value = None
+    mock_db.execute = AsyncMock(return_value=not_found)
+    mock_db.commit = AsyncMock()
 
-    db = db_session_factory()
-    try:
-        device = db.query(DahuaDevice).filter_by(host="10.0.0.20").first()
-        assert device is not None
-        assert device.name == "Default Device"
-    finally:
-        db.close()
+    await _seed_devices(mock_db, settings)
+
+    assert mock_db.add.call_count == 2
+    added_devices = [call.args[0] for call in mock_db.add.call_args_list]
+    names = [d.name for d in added_devices]
+    assert "Main Gate" in names
+    assert "Side Gate" in names
+
+
+@pytest.mark.asyncio
+async def test_seed_devices_falls_back_to_default_host() -> None:
+    from app.config import Settings
+    settings = Settings(
+        mindbody_api_key="k", mindbody_site_id="s", mindbody_api_base_url="https://x",
+        mindbody_username="u", mindbody_password="p", mindbody_webhook_signature_key="wk",
+        dahua_devices="", dahua_default_host="10.0.0.20", dahua_default_password="pw",
+        database_url="postgresql://localhost/test", admin_username="admin",
+        admin_password="changeme", secret_key="x",
+    )
+
+    mock_db = AsyncMock()
+    mock_db.add = MagicMock()
+    not_found = MagicMock()
+    not_found.scalar_one_or_none.return_value = None
+    mock_db.execute = AsyncMock(return_value=not_found)
+    mock_db.commit = AsyncMock()
+
+    await _seed_devices(mock_db, settings)
+
+    assert mock_db.add.call_count == 1
+    added = mock_db.add.call_args.args[0]
+    assert isinstance(added, DahuaDevice)
+    assert added.host == "10.0.0.20"
+    assert added.name == "Default Device"

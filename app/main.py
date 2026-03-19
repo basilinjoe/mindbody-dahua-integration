@@ -8,6 +8,8 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.templating import Jinja2Templates
 
@@ -16,7 +18,7 @@ from app.api.router import api_router
 from app.clients.mindbody import MindBodyClient
 from app.config import Settings
 from app.models.admin_user import AdminUser
-from app.models.database import init_async_db, init_db
+from app.models.database import Base, async_engine, init_async_db
 from app.models.device import DahuaDevice
 from app.models.export_job import ExportJob, ExportStatus  # noqa: F401 — registers table
 
@@ -41,56 +43,48 @@ def _build_lifespan(
         logger = logging.getLogger("app")
         logger.info("Starting MindBody-Dahua Gate Sync")
 
-        # Database (sync — FastAPI routes)
-        db_session_factory = db_session_factory_override or init_db(app_settings.database_url)
+        # Async database — all routes and Prefect tasks
+        async_session_factory = init_async_db(app_settings.database_url)
 
-        # Async database — Prefect tasks
-        init_async_db(app_settings.database_url)
+        # Create tables (idempotent; skipped if migrations handle DDL)
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-        # Seed admin user on first boot
-        _seed_admin(db_session_factory, app_settings)
-
-        # Seed Dahua devices from env config
-        _seed_devices(db_session_factory, app_settings)
-
-        # Reset any export jobs that were stuck in-flight when the server last stopped
-        _recover_stuck_export_jobs(db_session_factory)
-
-        # MindBody client (used by export routes)
-        mb_factory = mindbody_client_factory or MindBodyClient
-        mb_client = mb_factory(app_settings)
+        # Seed and recover using a single async session
+        async with async_session_factory() as db:
+            await _seed_admin(db, app_settings)
+            await _seed_devices(db, app_settings)
+            await _recover_stuck_export_jobs(db)
 
         # Templates
         templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
         # Store on app.state for route handlers
         app.state.settings = app_settings
-        app.state.db_session_factory = db_session_factory
         app.state.templates = templates
+
+        # Legacy: expose sync factory for health check route (if injected by tests)
+        if db_session_factory_override is not None:
+            app.state.db_session_factory = db_session_factory_override
 
         yield
 
-        # Cleanup
-        await mb_client.close()
         logger.info("Shutdown complete")
 
     return lifespan
 
 
-def _seed_admin(db_session_factory, settings: Settings) -> None:
-    db = db_session_factory()
-    try:
-        if db.query(AdminUser).count() == 0:
-            admin = AdminUser(username=settings.admin_username)
-            admin.set_password(settings.admin_password)
-            db.add(admin)
-            db.commit()
-            logging.getLogger("app").info("Seeded admin user: %s", settings.admin_username)
-    finally:
-        db.close()
+async def _seed_admin(db: AsyncSession, settings: Settings) -> None:
+    result = await db.execute(select(AdminUser).limit(1))
+    if result.scalar_one_or_none() is None:
+        admin = AdminUser(username=settings.admin_username)
+        admin.set_password(settings.admin_password)
+        db.add(admin)
+        await db.commit()
+        logging.getLogger("app").info("Seeded admin user: %s", settings.admin_username)
 
 
-def _seed_devices(db_session_factory, settings: Settings) -> None:
+async def _seed_devices(db: AsyncSession, settings: Settings) -> None:
     logger = logging.getLogger("app")
     devices_to_seed: list[dict] = []
 
@@ -121,48 +115,41 @@ def _seed_devices(db_session_factory, settings: Settings) -> None:
     if not devices_to_seed:
         return
 
-    db = db_session_factory()
-    try:
-        for entry in devices_to_seed:
-            host = entry.get("host", "").strip()
-            if not host:
-                continue
-            exists = db.query(DahuaDevice).filter_by(host=host).first()
-            if not exists:
-                device = DahuaDevice(
-                    name=entry.get("name", host),
-                    host=host,
-                    port=int(entry.get("port", 80)),
-                    username=entry.get("username", "admin"),
-                    password=entry.get("password", ""),
-                    door_ids=entry.get("door_ids", "0"),
-                    is_enabled=bool(entry.get("is_enabled", True)),
-                    gate_type=entry.get("gate_type", "all"),
-                    enable_integration=bool(entry.get("enable_integration", True)),
-                )
-                db.add(device)
-                logger.info("Seeded Dahua device: %s (%s)", device.name, host)
-        db.commit()
-    finally:
-        db.close()
+    for entry in devices_to_seed:
+        host = entry.get("host", "").strip()
+        if not host:
+            continue
+        existing = await db.execute(select(DahuaDevice).where(DahuaDevice.host == host))
+        if existing.scalar_one_or_none() is None:
+            device = DahuaDevice(
+                name=entry.get("name", host),
+                host=host,
+                port=int(entry.get("port", 80)),
+                username=entry.get("username", "admin"),
+                password=entry.get("password", ""),
+                door_ids=entry.get("door_ids", "0"),
+                is_enabled=bool(entry.get("is_enabled", True)),
+                gate_type=entry.get("gate_type", "all"),
+                enable_integration=bool(entry.get("enable_integration", True)),
+            )
+            db.add(device)
+            logger.info("Seeded Dahua device: %s (%s)", device.name, host)
+    await db.commit()
 
 
-def _recover_stuck_export_jobs(db_session_factory) -> None:
-    db = db_session_factory()
-    try:
-        stuck = (
-            db.query(ExportJob)
-            .filter(ExportJob.status.in_([ExportStatus.pending, ExportStatus.running]))
-            .all()
+async def _recover_stuck_export_jobs(db: AsyncSession) -> None:
+    result = await db.execute(
+        select(ExportJob).where(
+            ExportJob.status.in_([ExportStatus.pending, ExportStatus.running])
         )
-        for job in stuck:
-            job.status = ExportStatus.failed
-            job.error_msg = "Server restarted during export"
-        if stuck:
-            db.commit()
-            logging.getLogger("app").info("Reset %d stuck export job(s) to failed", len(stuck))
-    finally:
-        db.close()
+    )
+    stuck = list(result.scalars().all())
+    for job in stuck:
+        job.status = ExportStatus.failed
+        job.error_msg = "Server restarted during export"
+    if stuck:
+        await db.commit()
+        logging.getLogger("app").info("Reset %d stuck export job(s) to failed", len(stuck))
 
 
 def create_app(
