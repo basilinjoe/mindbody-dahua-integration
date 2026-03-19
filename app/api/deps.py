@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from fastapi import Request
-from sqlalchemy.orm import Session
 
-from app.models.database import get_db
+from app.models.database import get_async_db  # noqa: F401 — re-exported for Depends()
 
 
 def get_sync_engine(request: Request):
@@ -12,7 +11,3 @@ def get_sync_engine(request: Request):
 
 def get_settings(request: Request):
     return request.app.state.settings
-
-
-def get_db_session(request: Request) -> Session:
-    return next(get_db())
