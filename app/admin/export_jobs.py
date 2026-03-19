@@ -8,11 +8,13 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.device import DahuaDevice
-from app.models.export_job import ExportJob, ExportStatus
+from app.api.deps import get_async_db
+from app.models.export_job import ExportStatus
+from app.services import export_jobs as export_jobs_svc
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/exports")
@@ -97,17 +99,17 @@ def _build_dahua_csv(users: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
-    db = db_session_factory()
-    try:
-        job = db.query(ExportJob).get(job_id)
-        job.status = ExportStatus.running
-        job.started_at = datetime.now(UTC)
-        db.commit()
-    finally:
-        db.close()
+async def _run_export_job(job_id: int, sync_engine) -> None:
+    """Background task: run the CSV export. Uses its own async sessions."""
+    from app.models.database import AsyncSessionLocal
+    from app.models.device import DahuaDevice
+    from sqlalchemy import select
 
-    db = db_session_factory()
+    async with AsyncSessionLocal() as db:
+        await export_jobs_svc.update(
+            db, job_id, status=ExportStatus.running, started_at=datetime.now(UTC)
+        )
+
     try:
         buffers: dict[str, str] = {}
 
@@ -116,9 +118,14 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
         buffers["mindbody_users.csv"] = _build_mindbody_csv(clients)
 
         # All enabled Dahua devices
-        sync_engine.refresh_devices(db)
+        async with AsyncSessionLocal() as db:
+            devices_result = await db.execute(
+                select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True))
+            )
+            db_devices = {d.id: d for d in devices_result.scalars().all()}
+
         for device_id, dahua_client in list(sync_engine._dahua_clients.items()):
-            device = db.query(DahuaDevice).get(device_id)
+            device = db_devices.get(device_id)
             device_name = device.name if device else str(device_id)
             users = await dahua_client.get_all_users()
             safe_name = re.sub(r"[^\w\-]", "_", device_name)
@@ -132,29 +139,27 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
             for name, content in buffers.items():
                 zf.writestr(name, content)
 
-        job = db.query(ExportJob).get(job_id)
-        job.status = ExportStatus.complete
-        job.zip_path = str(zip_path)
-        job.file_name = file_name
-        job.finished_at = datetime.now(UTC)
-        db.commit()
+        async with AsyncSessionLocal() as db:
+            await export_jobs_svc.update(
+                db,
+                job_id,
+                status=ExportStatus.complete,
+                zip_path=str(zip_path),
+                file_name=file_name,
+                finished_at=datetime.now(UTC),
+            )
         logger.info("Export job %d complete: %s", job_id, file_name)
 
     except Exception as exc:
         logger.exception("Export job %d failed", job_id)
-        db.rollback()
-        fresh = db_session_factory()
-        try:
-            job = fresh.query(ExportJob).get(job_id)
-            if job:
-                job.status = ExportStatus.failed
-                job.error_msg = str(exc)
-                job.finished_at = datetime.now(UTC)
-                fresh.commit()
-        finally:
-            fresh.close()
-    finally:
-        db.close()
+        async with AsyncSessionLocal() as db:
+            await export_jobs_svc.update(
+                db,
+                job_id,
+                status=ExportStatus.failed,
+                error_msg=str(exc),
+                finished_at=datetime.now(UTC),
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -163,60 +168,57 @@ async def _run_export_job(job_id: int, db_session_factory, sync_engine) -> None:
 
 
 @router.get("", response_class=HTMLResponse)
-async def exports_page(request: Request):
+async def exports_page(
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
     """Dedicated exports page."""
-    db = request.app.state.db_session_factory()
-    try:
-        jobs = db.query(ExportJob).order_by(ExportJob.created_at.desc()).limit(20).all()
-        devices = db.query(DahuaDevice).filter_by(is_enabled=True).order_by(DahuaDevice.name).all()
-        return request.app.state.templates.TemplateResponse(
-            "exports/index.html",
-            {
-                "request": request,
-                "session_user": request.state.user,
-                "active_page": "exports",
-                "jobs": jobs,
-                "devices": devices,
-            },
-        )
-    finally:
-        db.close()
+    jobs = await export_jobs_svc.list_all(db)
+    from sqlalchemy import select as _select
+    from app.models.device import DahuaDevice as _DahuaDevice
+    devices_result = await db.execute(
+        _select(_DahuaDevice).where(_DahuaDevice.is_enabled.is_(True)).order_by(_DahuaDevice.name)
+    )
+    devices = list(devices_result.scalars().all())
+    return request.app.state.templates.TemplateResponse(
+        "exports/index.html",
+        {
+            "request": request,
+            "session_user": request.state.user,
+            "active_page": "exports",
+            "jobs": jobs,
+            "devices": devices,
+        },
+    )
 
 
 @router.post("/all")
-async def export_all(request: Request, background_tasks: BackgroundTasks):
+async def export_all(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_async_db),
+):
     """Trigger a background export of all sources (MindBody + all Dahua devices)."""
-    db = request.app.state.db_session_factory()
-    try:
-        job = ExportJob(status=ExportStatus.pending)
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-        job_id = job.id
-    finally:
-        db.close()
-
+    job = await export_jobs_svc.create(db)
     background_tasks.add_task(
         _run_export_job,
-        job_id,
-        request.app.state.db_session_factory,
+        job.id,
         request.app.state.sync_engine,
     )
     return RedirectResponse(url="/admin/exports", status_code=303)
 
 
 @router.get("/jobs", response_class=HTMLResponse)
-async def export_jobs_partial(request: Request):
+async def export_jobs_partial(
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
     """HTMX partial — returns the export jobs status panel."""
-    db = request.app.state.db_session_factory()
-    try:
-        jobs = db.query(ExportJob).order_by(ExportJob.created_at.desc()).limit(20).all()
-        return request.app.state.templates.TemplateResponse(
-            "partials/export_jobs.html",
-            {"request": request, "jobs": jobs},
-        )
-    finally:
-        db.close()
+    jobs = await export_jobs_svc.list_all(db)
+    return request.app.state.templates.TemplateResponse(
+        "partials/export_jobs.html",
+        {"request": request, "jobs": jobs},
+    )
 
 
 @router.get("/mindbody.csv")
@@ -233,21 +235,26 @@ async def export_mindbody_csv(request: Request):
 
 
 @router.get("/dahua/{device_id}.csv")
-async def export_dahua_csv(request: Request, device_id: int):
+async def export_dahua_csv(
+    request: Request,
+    device_id: int,
+    db: AsyncSession = Depends(get_async_db),
+):
     """Download all users from a single Dahua device as CSV."""
-    db = request.app.state.db_session_factory()
-    try:
-        device = db.query(DahuaDevice).filter_by(id=device_id, is_enabled=True).first()
-        if not device:
-            return Response(content="Device not found or not enabled", status_code=404)
-        device_name = device.name
-    finally:
-        db.close()
+    from sqlalchemy import select as _select
+    from app.models.device import DahuaDevice as _DahuaDevice
+
+    result = await db.execute(
+        _select(_DahuaDevice).where(
+            _DahuaDevice.id == device_id, _DahuaDevice.is_enabled.is_(True)
+        )
+    )
+    device = result.scalar_one_or_none()
+    if not device:
+        return Response(content="Device not found or not enabled", status_code=404)
+    device_name = device.name
 
     engine = request.app.state.sync_engine
-    engine.refresh_devices(db := request.app.state.db_session_factory())
-    db.close()
-
     dahua_client = engine._dahua_clients.get(device_id)
     if not dahua_client:
         return Response(content="Device client not available", status_code=404)
@@ -263,20 +270,20 @@ async def export_dahua_csv(request: Request, device_id: int):
 
 
 @router.get("/{job_id}/download")
-async def export_download(request: Request, job_id: int):
+async def export_download(
+    request: Request,
+    job_id: int,
+    db: AsyncSession = Depends(get_async_db),
+):
     """Download the ZIP for a completed export job."""
-    db = request.app.state.db_session_factory()
-    try:
-        job = db.query(ExportJob).get(job_id)
-        if not job or job.status != ExportStatus.complete or not job.zip_path:
-            return Response(content="Export not ready", status_code=404)
-        path = Path(job.zip_path)
-        if not path.exists():
-            return Response(content="Export file has expired", status_code=410)
-        return FileResponse(
-            path=str(path),
-            media_type="application/zip",
-            filename=job.file_name or path.name,
-        )
-    finally:
-        db.close()
+    job = await export_jobs_svc.get(db, job_id)
+    if not job or job.status != ExportStatus.complete or not job.zip_path:
+        return Response(content="Export not ready", status_code=404)
+    path = Path(job.zip_path)
+    if not path.exists():
+        return Response(content="Export file has expired", status_code=410)
+    return FileResponse(
+        path=str(path),
+        media_type="application/zip",
+        filename=job.file_name or path.name,
+    )
