@@ -5,10 +5,9 @@ from datetime import UTC, datetime
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_markdown_artifact
-from sqlalchemy import update
 
 from app.models.database import _get_async_session_factory
-from app.models.device import DahuaDevice
+from app.services import devices as devices_svc
 from app.sync.tasks import check_device_health_task, load_all_devices
 
 logger = logging.getLogger(__name__)
@@ -32,14 +31,7 @@ async def device_health_flow() -> None:
 
         # Update DB
         async with _get_async_session_factory()() as db:
-            await db.execute(
-                update(DahuaDevice)
-                .where(DahuaDevice.id == device.id)
-                .values(
-                    status=status,
-                    last_seen_at=datetime.now(UTC).replace(tzinfo=None) if status == "online" else None,
-                )
-            )
+            await devices_svc.update_status(db, device.id, status)
             await db.commit()
 
         rows.append(f"| {device.name} | {device.host} | {status} |")
