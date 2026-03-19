@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from app.models.admin_user import AdminUser
 from app.models.device import DahuaDevice
-from app.models.sync_log import SyncLog
-
-
 def make_admin_user(
     username: str = "admin", password: str = "changeme", is_active: bool = True
 ) -> AdminUser:
@@ -36,20 +33,3 @@ def make_device(
     )
 
 
-def make_sync_log(
-    *,
-    sync_type: str = "full_poll",
-    action: str = "enroll",
-    mindbody_client_id: str | None = "1",
-    member_name: str | None = "John Doe",
-    success: bool = True,
-    error_message: str | None = None,
-) -> SyncLog:
-    return SyncLog(
-        sync_type=sync_type,
-        action=action,
-        mindbody_client_id=mindbody_client_id,
-        member_name=member_name,
-        success=success,
-        error_message=error_message,
-    )

@@ -26,6 +26,7 @@ from prefect.variables import Variable
 from app.models.database import init_async_db, init_db
 from app.models.device import DahuaDevice
 from app.sync.blocks import MindBodyCredentials
+from app.sync.flows.dahua_push import sync_dahua_push_flow
 from app.sync.flows.health import device_health_flow
 from app.sync.flows.integration import sync_integration_flow
 
@@ -53,6 +54,7 @@ async def _sync_variables_from_env() -> None:
     mapping = {
         "SYNC_INTERVAL_MINUTES": "sync_interval_minutes",
         "HEALTH_INTERVAL_MINUTES": "health_interval_minutes",
+        "DAHUA_PUSH_ENABLED": "dahua_push_enabled",
     }
     for env_key, var_name in mapping.items():
         value = os.environ.get(env_key)
@@ -129,6 +131,11 @@ async def _setup() -> tuple[int, int]:
     # Sync variables from env vars (idempotent)
     await _sync_variables_from_env()
 
+    # Seed dahua_push_enabled default (false) only if not already set
+    if await Variable.get("dahua_push_enabled", default=None) is None:
+        await Variable.set("dahua_push_enabled", "false")
+        logger.info("Prefect variable 'dahua_push_enabled' initialised to 'false'")
+
     # Read schedule intervals from Prefect Variables
     interval = int(await Variable.get("sync_interval_minutes", default="30"))
     health_interval = int(await Variable.get("health_interval_minutes", default="5"))
@@ -153,6 +160,11 @@ async def main() -> None:
             name="scheduled",
             interval=timedelta(minutes=health_interval),
             tags=["health"],
+        ),
+        # Manual-only — retry a push by supplying the original run_id
+        await sync_dahua_push_flow.ato_deployment(
+            name="retry",
+            tags=["dahua", "push"],
         ),
     )
 

@@ -5,10 +5,9 @@ import json
 import logging
 from collections import Counter
 from datetime import UTC, datetime
-from uuid import uuid4
-
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
+from prefect.runtime import flow_run
 
 from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
@@ -39,7 +38,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     5. Write operations to dahua_sync_queue and execute against devices
     """
     flow_logger = get_run_logger()
-    run_id = str(uuid4())
+    run_id = str(flow_run.id)
     run_started_at = datetime.now(UTC)
     flow_logger.info("Integration sync started (run_id=%s)", run_id)
 
