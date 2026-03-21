@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.devices import list_all, get_by_id, update_status
+from app.services.devices import get_by_id, list_all, update_status
 
 
 @pytest.mark.asyncio
@@ -32,6 +33,7 @@ async def test_get_by_id_returns_none_for_missing():
 @pytest.mark.asyncio
 async def test_update_status_sets_offline():
     from app.models.device import DahuaDevice
+
     mock_db = AsyncMock(spec=AsyncSession)
     fake_device = MagicMock(spec=DahuaDevice)
     fake_device.status = "online"

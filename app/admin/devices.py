@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_async_db
@@ -80,7 +81,7 @@ async def device_add_submit(
         await db.commit()
         logger.info("Added device: %s (%s)", name, host)
         return RedirectResponse(url="/admin/devices", status_code=303)
-    except Exception as e:
+    except IntegrityError:
         await db.rollback()
         return request.app.state.templates.TemplateResponse(
             "devices/form.html",
@@ -89,7 +90,20 @@ async def device_add_submit(
                 "session_user": request.state.user,
                 "active_page": "devices",
                 "device": None,
-                "error": str(e),
+                "error": "A device with this hostname already exists.",
+            },
+        )
+    except Exception:
+        logger.exception("Failed to add device: %s (%s)", name, host)
+        await db.rollback()
+        return request.app.state.templates.TemplateResponse(
+            "devices/form.html",
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": None,
+                "error": "Failed to add device. Check logs for details.",
             },
         )
 
@@ -147,7 +161,7 @@ async def device_edit_submit(
         await db.commit()
         logger.info("Updated device: %s (%s)", name, host)
         return RedirectResponse(url="/admin/devices", status_code=303)
-    except Exception as e:
+    except IntegrityError:
         await db.rollback()
         return request.app.state.templates.TemplateResponse(
             "devices/form.html",
@@ -156,7 +170,20 @@ async def device_edit_submit(
                 "session_user": request.state.user,
                 "active_page": "devices",
                 "device": device,
-                "error": str(e),
+                "error": "A device with this hostname already exists.",
+            },
+        )
+    except Exception:
+        logger.exception("Failed to update device %d: %s (%s)", device_id, name, host)
+        await db.rollback()
+        return request.app.state.templates.TemplateResponse(
+            "devices/form.html",
+            {
+                "request": request,
+                "session_user": request.state.user,
+                "active_page": "devices",
+                "device": device,
+                "error": "Failed to update device. Check logs for details.",
             },
         )
 
@@ -328,14 +355,11 @@ async def device_user_detail(
     if not device:
         return RedirectResponse(url="/admin/devices", status_code=303)
 
-    result = await db.execute(
-        select(MindBodyClient).where(MindBodyClient.mindbody_id == user_id)
-    )
+    result = await db.execute(select(MindBodyClient).where(MindBodyClient.mindbody_id == user_id))
     synced_member = result.scalar_one_or_none()
 
     user = None
     error = None
-    device_face_photo = None
     client = DahuaClient(
         host=device.host,
         port=device.port,
@@ -345,11 +369,6 @@ async def device_user_detail(
     )
     try:
         user = await client.get_user(user_id)
-        if user:
-            try:
-                device_face_photo = await client.get_face_photo(user_id)
-            except Exception:
-                pass  # non-critical
     except Exception as e:
         error = f"Could not connect to device: {e}"
         logger.exception("Failed to fetch user %s from device %d", user_id, device_id)
@@ -368,7 +387,7 @@ async def device_user_detail(
             "device": device,
             "user": user,
             "synced_member": synced_member,
-            "device_face_photo": device_face_photo,
+            "device_face_photo": None,
             "error": error,
         },
     )

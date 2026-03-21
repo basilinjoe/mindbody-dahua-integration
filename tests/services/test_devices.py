@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -14,6 +14,7 @@ def mock_db():
 @pytest.fixture
 def fake_device():
     from app.models.device import DahuaDevice
+
     d = MagicMock(spec=DahuaDevice)
     d.id = 1
     d.name = "Gate A"

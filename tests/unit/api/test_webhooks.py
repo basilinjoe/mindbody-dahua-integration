@@ -71,6 +71,23 @@ def test_webhook_invalid_json_returns_400() -> None:
     assert resp.status_code == 400
 
 
+def test_webhook_missing_event_id_returns_400() -> None:
+    """Payload without eventId should be rejected."""
+    app = _build_app(signature_key="secret")
+    payload = {"eventData": {"clientId": "12345"}}
+    body = json.dumps(payload).encode("utf-8")
+    with TestClient(app) as client:
+        resp = client.post(
+            "/webhooks/mindbody",
+            content=body,
+            headers={
+                "X-Mindbody-Signature": _signature(body, "secret"),
+                "Content-Type": "application/json",
+            },
+        )
+    assert resp.status_code == 400
+
+
 def test_webhook_valid_event_returns_200() -> None:
     app = _build_app(signature_key="secret")
     payload = {"eventId": "client.updated", "eventData": {"clientId": "12345"}}

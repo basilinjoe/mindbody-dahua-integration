@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import cast, func, or_, select
-from sqlalchemy.types import DateTime
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import DateTime
 
 from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.device import DahuaDevice
@@ -16,9 +16,7 @@ async def get_stats(db: AsyncSession) -> dict:
     """Return a dict of aggregate counts for the dashboard summary panel."""
     now = datetime.now(UTC)
 
-    total_members = (
-        await db.execute(select(func.count(MindBodyClient.id)))
-    ).scalar() or 0
+    total_members = (await db.execute(select(func.count(MindBodyClient.id)))).scalar() or 0
 
     active_members = (
         await db.execute(
@@ -45,9 +43,7 @@ async def get_stats(db: AsyncSession) -> dict:
     ).scalar() or 0
 
     total_devices = (
-        await db.execute(
-            select(func.count(DahuaDevice.id)).where(DahuaDevice.is_enabled.is_(True))
-        )
+        await db.execute(select(func.count(DahuaDevice.id)).where(DahuaDevice.is_enabled.is_(True)))
     ).scalar() or 0
 
     online_devices = (
@@ -72,6 +68,7 @@ async def get_stats(db: AsyncSession) -> dict:
     ).scalar() or 0
 
     from datetime import timedelta
+
     cutoff_24h = (now - timedelta(hours=24)).replace(tzinfo=None)
     failed_24h = (
         await db.execute(
@@ -94,7 +91,9 @@ async def get_stats(db: AsyncSession) -> dict:
     }
 
 
-async def get_recent_queue(db: AsyncSession, limit: int = 10) -> list[tuple[DahuaSyncQueue, str | None]]:
+async def get_recent_queue(
+    db: AsyncSession, limit: int = 10
+) -> list[tuple[DahuaSyncQueue, str | None]]:
     """Return (queue_item, device_name) tuples for the most recent queue rows."""
     result = await db.execute(
         select(DahuaSyncQueue, DahuaDevice.name)
@@ -152,9 +151,7 @@ async def get_device_rows(db: AsyncSession) -> list[dict]:
     from datetime import timedelta
 
     devices_result = await db.execute(
-        select(DahuaDevice)
-        .where(DahuaDevice.is_enabled.is_(True))
-        .order_by(DahuaDevice.name)
+        select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True)).order_by(DahuaDevice.name)
     )
     devices = list(devices_result.scalars().all())
 

@@ -3,12 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from prefect import task
 from prefect.cache_policies import INPUTS
 from prefect.concurrency.asyncio import concurrency
-from sqlalchemy import select
 
 from app.clients.dahua import DahuaClient
 from app.clients.mindbody import MINDBODY_PAGE_SIZE, MindBodyClient
@@ -46,6 +45,7 @@ def _format_dahua_date(iso_str: str | None) -> str | None:
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError):
+        logger.warning("Malformed date from MindBody API, skipping: %r", iso_str)
         return None
 
 
@@ -222,7 +222,9 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
     result: dict[str, list[dict]] = {}
     for batch, chunk in zip(batches, chunks, strict=True):
         if isinstance(chunk, Exception):
-            logger.warning("Bulk membership fetch failed for batch of %d — skipping: %s", len(batch), chunk)
+            logger.warning(
+                "Bulk membership fetch failed for batch of %d — skipping: %s", len(batch), chunk
+            )
         else:
             result.update(chunk)
     return result

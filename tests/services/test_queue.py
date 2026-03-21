@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -17,8 +16,14 @@ async def test_write_batch_adds_rows(mock_db):
     from app.services.queue import write_batch
 
     items = [
-        {"mindbody_client_id": "101", "device_id": 1, "action": "enroll",
-         "status": "pending", "dahua_user_id": None, "member_snapshot": None},
+        {
+            "mindbody_client_id": "101",
+            "device_id": 1,
+            "action": "enroll",
+            "status": "pending",
+            "dahua_user_id": None,
+            "member_snapshot": None,
+        },
     ]
     mock_db.add_all = MagicMock()
     mock_db.commit = AsyncMock()
@@ -43,8 +48,8 @@ async def test_write_batch_empty_items(mock_db):
 
 @pytest.mark.asyncio
 async def test_load_pending_returns_pending_rows(mock_db):
-    from app.services.queue import load_pending
     from app.models.dahua_sync_queue import DahuaSyncQueue
+    from app.services.queue import load_pending
 
     fake_item = MagicMock(spec=DahuaSyncQueue)
     fake_item.status = "pending"
@@ -58,8 +63,8 @@ async def test_load_pending_returns_pending_rows(mock_db):
 
 @pytest.mark.asyncio
 async def test_mark_item_updates_status(mock_db):
-    from app.services.queue import mark_item
     from app.models.dahua_sync_queue import DahuaSyncQueue
+    from app.services.queue import mark_item
 
     fake_item = MagicMock(spec=DahuaSyncQueue)
     fake_item.status = "pending"

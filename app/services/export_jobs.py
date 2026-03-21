@@ -19,17 +19,13 @@ async def create(db: AsyncSession) -> ExportJob:
 
 async def get(db: AsyncSession, job_id: int) -> ExportJob | None:
     """Return a single ExportJob by primary key, or None."""
-    result = await db.execute(
-        select(ExportJob).where(ExportJob.id == job_id)
-    )
+    result = await db.execute(select(ExportJob).where(ExportJob.id == job_id))
     return result.scalar_one_or_none()
 
 
 async def list_all(db: AsyncSession, limit: int = 20) -> list[ExportJob]:
     """Return the most recent export jobs ordered by created_at descending."""
-    result = await db.execute(
-        select(ExportJob).order_by(ExportJob.created_at.desc()).limit(limit)
-    )
+    result = await db.execute(select(ExportJob).order_by(ExportJob.created_at.desc()).limit(limit))
     return list(result.scalars().all())
 
 
@@ -45,9 +41,7 @@ async def update(
     finished_at: datetime | None = None,
 ) -> None:
     """Apply partial updates to an ExportJob. No-op if job not found."""
-    result = await db.execute(
-        select(ExportJob).where(ExportJob.id == job_id)
-    )
+    result = await db.execute(select(ExportJob).where(ExportJob.id == job_id))
     job = result.scalar_one_or_none()
     if job is None:
         return

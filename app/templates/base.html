@@ -6,6 +6,7 @@
   <title>{% block title %}Admin{% endblock %} — MindBody-Dahua Sync</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <style>
     [hx-indicator] .htmx-indicator { display: none; }
     .htmx-request .htmx-indicator { display: inline-block; }
@@ -70,5 +71,12 @@
   {% block fullpage %}{% endblock %}
 {% endif %}
 
+<script>
+  // Include CSRF token in all HTMX requests (POST, DELETE, etc.)
+  document.body.addEventListener('htmx:configRequest', function(event) {
+    var token = document.querySelector('meta[name="csrf-token"]');
+    if (token) { event.detail.parameters['csrf_token'] = token.content; }
+  });
+</script>
 </body>
 </html>

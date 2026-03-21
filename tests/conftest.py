@@ -10,12 +10,27 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.main import create_app
+from app.models import database as db_module
 from app.models.database import Base
 from tests.helpers.fakes import FakeMindBodyClient
 
-_TEST_DB_URL = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost/test_sync"
-)
+_TEST_DB_URL = os.environ.get("TEST_DATABASE_URL", "sqlite:///")
+_TEST_ASYNC_DB_URL = _TEST_DB_URL.replace("sqlite:///", "sqlite+aiosqlite:///")
+
+
+@pytest.fixture(autouse=True)
+async def _reset_async_db_globals():
+    """Reset global async engine state before each test to prevent cross-test contamination."""
+    old_engine = db_module.async_engine
+    old_factory = db_module.AsyncSessionLocal
+    db_module.async_engine = None
+    db_module.AsyncSessionLocal = None
+    yield
+    # Dispose the engine created during this test to close aiosqlite connections
+    if db_module.async_engine is not None and db_module.async_engine is not old_engine:
+        await db_module.async_engine.dispose()
+    db_module.async_engine = old_engine
+    db_module.AsyncSessionLocal = old_factory
 
 
 @pytest.fixture
@@ -30,7 +45,7 @@ def settings() -> Settings:
         dahua_devices="",
         dahua_default_host="",
         dahua_default_password="",
-        database_url=_TEST_DB_URL,
+        database_url=_TEST_ASYNC_DB_URL,
         admin_username="admin",
         admin_password="changeme",
         secret_key="unit-test-secret-key",
@@ -73,12 +88,11 @@ def app(
     db_session_factory: sessionmaker[Session],
     fake_mindbody_client: FakeMindBodyClient,
 ):
-    app = create_app(
+    return create_app(
         settings=settings,
         db_session_factory_override=db_session_factory,
         mindbody_client_factory=lambda _: fake_mindbody_client,
     )
-    return app
 
 
 @pytest.fixture

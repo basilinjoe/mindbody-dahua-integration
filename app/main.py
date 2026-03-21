@@ -13,12 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.templating import Jinja2Templates
 
+import app.models.database as _db
+from app.admin.csrf import generate_csrf_token
 from app.admin.router import AdminAuthMiddleware, admin_router
 from app.api.router import api_router
 from app.clients.mindbody import MindBodyClient
 from app.config import Settings
 from app.models.admin_user import AdminUser
-import app.models.database as _db
 from app.models.database import Base, init_async_db
 from app.models.device import DahuaDevice
 from app.models.export_job import ExportJob, ExportStatus  # noqa: F401 — registers table
@@ -57,8 +58,9 @@ def _build_lifespan(
             await _seed_devices(db, app_settings)
             await _recover_stuck_export_jobs(db)
 
-        # Templates
+        # Templates — inject csrf_token() global for all forms
         templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+        templates.env.globals["csrf_token"] = lambda: generate_csrf_token(app_settings.secret_key)
 
         # Store on app.state for route handlers
         app.state.settings = app_settings
@@ -140,9 +142,7 @@ async def _seed_devices(db: AsyncSession, settings: Settings) -> None:
 
 async def _recover_stuck_export_jobs(db: AsyncSession) -> None:
     result = await db.execute(
-        select(ExportJob).where(
-            ExportJob.status.in_([ExportStatus.pending, ExportStatus.running])
-        )
+        select(ExportJob).where(ExportJob.status.in_([ExportStatus.pending, ExportStatus.running]))
     )
     stuck = list(result.scalars().all())
     for job in stuck:

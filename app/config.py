@@ -36,4 +36,4 @@ class Settings(BaseSettings):
     session_expire_hours: int = 8
     secure_cookies: bool = True
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}

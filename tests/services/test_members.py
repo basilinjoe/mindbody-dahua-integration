@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -50,14 +50,38 @@ async def test_upsert_batch_deduplicates(mock_db):
     from app.services.members import upsert_batch
 
     members = [
-        {"Id": "101", "UniqueId": "u101", "FirstName": "Alice", "LastName": "Smith",
-         "Email": None, "MobilePhone": None, "HomePhone": None, "WorkPhone": None,
-         "Status": "Active", "Active": True, "BirthDate": None, "Gender": None,
-         "CreationDate": None, "LastModifiedDateTime": None},
-        {"Id": "101", "UniqueId": "u101", "FirstName": "Alice", "LastName": "Smith",
-         "Email": None, "MobilePhone": None, "HomePhone": None, "WorkPhone": None,
-         "Status": "Active", "Active": True, "BirthDate": None, "Gender": None,
-         "CreationDate": None, "LastModifiedDateTime": None},
+        {
+            "Id": "101",
+            "UniqueId": "u101",
+            "FirstName": "Alice",
+            "LastName": "Smith",
+            "Email": None,
+            "MobilePhone": None,
+            "HomePhone": None,
+            "WorkPhone": None,
+            "Status": "Active",
+            "Active": True,
+            "BirthDate": None,
+            "Gender": None,
+            "CreationDate": None,
+            "LastModifiedDateTime": None,
+        },
+        {
+            "Id": "101",
+            "UniqueId": "u101",
+            "FirstName": "Alice",
+            "LastName": "Smith",
+            "Email": None,
+            "MobilePhone": None,
+            "HomePhone": None,
+            "WorkPhone": None,
+            "Status": "Active",
+            "Active": True,
+            "BirthDate": None,
+            "Gender": None,
+            "CreationDate": None,
+            "LastModifiedDateTime": None,
+        },
     ]
 
     mock_db.execute = AsyncMock()

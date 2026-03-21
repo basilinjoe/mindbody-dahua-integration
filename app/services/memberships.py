@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +35,9 @@ async def upsert_batch(db: AsyncSession, memberships_by_client: dict[str, list[d
     stmt = insert(MindBodyMembership).values(rows)
     stmt = stmt.on_conflict_do_update(
         constraint="uq_mb_client_membership",
-        set_={k: stmt.excluded[k] for k in rows[0] if k not in ("mindbody_client_id", "membership_id")},
+        set_={
+            k: stmt.excluded[k] for k in rows[0] if k not in ("mindbody_client_id", "membership_id")
+        },
     )
     await db.execute(stmt)
     await db.commit()

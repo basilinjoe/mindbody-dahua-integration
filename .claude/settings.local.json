@@ -30,7 +30,8 @@
       "Bash(pytest tests/unit/admin/test_dashboard_stats.py -v)",
       "Bash(python -m pytest tests/unit/admin/test_device_user_count.py -v)",
       "Bash(pytest -q)",
-      "Bash(python -m pytest tests/unit/admin/ -v)"
+      "Bash(python -m pytest tests/unit/admin/ -v)",
+      "Bash(.venv/Scripts/pytest --cov=app --cov-report=term-missing --cov-fail-under=85)"
     ]
   },
   "hooks": {
@@ -40,13 +41,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python c:/Projects/mind-body-dahua/.claude/hooks/ruff_check.py"
+            "command": "python c:/projects/mindbody-dahua-integration/.claude/hooks/ruff_check.py"
           },
           {
             "type": "agent",
             "prompt": "A file was just modified. Review ONLY that file for code quality, reuse, and efficiency. Simplify and refine it for clarity, consistency, and maintainability while preserving all functionality. Do not change behaviour — only improve structure and readability. The modified file path is in: $ARGUMENTS",
-            "statusMessage": "Simplifying code...",
-            "async": true
+            "statusMessage": "Simplifying code..."
           }
         ]
       }

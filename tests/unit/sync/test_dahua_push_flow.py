@@ -82,7 +82,6 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         dahua_user_id: str,
         valid_start: str | None,
         valid_end: str | None,
-        enrollment_id: int | None = None,
     ):
         called_update_window.update(
             {
@@ -90,7 +89,6 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
                 "dahua_user_id": dahua_user_id,
                 "valid_start": valid_start,
                 "valid_end": valid_end,
-                "enrollment_id": enrollment_id,
             }
         )
         return True
@@ -103,7 +101,13 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
     async def fake_create_table_artifact(**_kwargs) -> None:  # noqa: ANN003
         return None
 
+    async def fake_variable_aget(name: str, default=None):  # noqa: ANN001, ANN202
+        if name == "dahua_push_enabled":
+            return "true"
+        return default
+
     monkeypatch.setattr(dahua_push_mod, "get_run_logger", lambda: _DummyLogger())
+    monkeypatch.setattr("app.sync.flows.dahua_push.Variable.aget", staticmethod(fake_variable_aget))
     monkeypatch.setattr(dahua_push_mod, "load_pending_queue_items", fake_load_pending_queue_items)
     monkeypatch.setattr(dahua_push_mod, "enroll_on_device", fake_enroll_on_device)
     monkeypatch.setattr(dahua_push_mod, "deactivate_on_device", fake_deactivate_on_device)
@@ -126,7 +130,6 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         "dahua_user_id": "101",
         "valid_start": "2026-01-01 00:00:00",
         "valid_end": "2026-12-31 23:59:59",
-        "enrollment_id": None,
     }
 
     by_id = {item_id: (status, error) for item_id, status, error in marks}

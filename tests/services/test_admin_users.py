@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -13,8 +13,8 @@ def mock_db():
 
 @pytest.mark.asyncio
 async def test_get_by_username_returns_user(mock_db):
-    from app.services.admin_users import get_by_username
     from app.models.admin_user import AdminUser
+    from app.services.admin_users import get_by_username
 
     fake_user = MagicMock(spec=AdminUser)
     fake_user.username = "admin"

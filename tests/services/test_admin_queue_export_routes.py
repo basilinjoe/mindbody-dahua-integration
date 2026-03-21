@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.export_jobs import list_all, update
 from app.services.queue import load_pending
-from app.services.export_jobs import list_all, create, get, update
 
 
 @pytest.mark.asyncio
@@ -39,5 +40,6 @@ async def test_export_jobs_update_noop():
     mock_db.commit = AsyncMock()
 
     from app.models.export_job import ExportStatus
+
     await update(mock_db, 9999, status=ExportStatus.failed)
     mock_db.commit.assert_not_called()

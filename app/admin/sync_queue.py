@@ -52,7 +52,9 @@ async def sync_queue_list(
         .outerjoin(DahuaDevice, DahuaDevice.id == DahuaSyncQueue.device_id)
         .where(
             *(
-                [DahuaSyncQueue.run_id == run_id] if run_id else []
+                [DahuaSyncQueue.run_id == run_id]
+                if run_id
+                else []
                 + ([DahuaSyncQueue.action == action] if action else [])
                 + ([DahuaSyncQueue.status == status] if status else [])
                 + ([DahuaSyncQueue.device_id == device_id] if device_id else [])
@@ -84,9 +86,7 @@ async def sync_queue_list(
     ]
 
     devices_result = await db.execute(
-        select(DahuaDevice)
-        .where(DahuaDevice.is_enabled.is_(True))
-        .order_by(DahuaDevice.name)
+        select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True)).order_by(DahuaDevice.name)
     )
     devices = list(devices_result.scalars().all())
 

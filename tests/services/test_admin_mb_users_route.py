@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.members import upsert_batch, get_last_fetched_at
+from app.services.members import get_last_fetched_at, upsert_batch
 
 
 @pytest.mark.asyncio

@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import cast, func, or_, select
-from sqlalchemy.types import DateTime
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.types import DateTime
 
 from app.models.mindbody_client import MindBodyClient
 from app.models.mindbody_membership import MindBodyMembership
@@ -65,7 +65,8 @@ async def load_active(db: AsyncSession) -> list[MindBodyClient]:
             MindBodyMembership.status == "Active",
             or_(
                 MindBodyMembership.expiration_date.is_(None),
-                cast(MindBodyMembership.expiration_date, DateTime(timezone=True)) > datetime.now(UTC),
+                cast(MindBodyMembership.expiration_date, DateTime(timezone=True))
+                > datetime.now(UTC),
             ),
         )
         .distinct()
@@ -75,7 +76,5 @@ async def load_active(db: AsyncSession) -> list[MindBodyClient]:
 
 async def get_last_fetched_at(db: AsyncSession) -> datetime | None:
     """Return the most recent last_fetched_at timestamp across all member rows."""
-    result = await db.execute(
-        select(func.max(MindBodyClient.last_fetched_at))
-    )
+    result = await db.execute(select(func.max(MindBodyClient.last_fetched_at)))
     return result.scalar_one_or_none()

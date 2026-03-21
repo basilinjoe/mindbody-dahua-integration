@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -14,6 +14,7 @@ def mock_db():
 @pytest.fixture
 def fake_job():
     from app.models.export_job import ExportJob, ExportStatus
+
     j = MagicMock(spec=ExportJob)
     j.id = 1
     j.status = ExportStatus.pending
@@ -22,8 +23,8 @@ def fake_job():
 
 @pytest.mark.asyncio
 async def test_create_returns_job(mock_db):
-    from app.services.export_jobs import create
     from app.models.export_job import ExportStatus
+    from app.services.export_jobs import create
 
     mock_db.add = MagicMock()
     mock_db.commit = AsyncMock()
@@ -74,8 +75,8 @@ async def test_list_all_returns_jobs(mock_db, fake_job):
 
 @pytest.mark.asyncio
 async def test_update_commits_changes(mock_db, fake_job):
-    from app.services.export_jobs import update
     from app.models.export_job import ExportStatus
+    from app.services.export_jobs import update
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = fake_job
@@ -89,8 +90,8 @@ async def test_update_commits_changes(mock_db, fake_job):
 
 @pytest.mark.asyncio
 async def test_update_noop_when_not_found(mock_db):
-    from app.services.export_jobs import update
     from app.models.export_job import ExportStatus
+    from app.services.export_jobs import update
 
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = None

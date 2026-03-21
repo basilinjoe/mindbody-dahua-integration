@@ -36,13 +36,11 @@ async def mark_item(
     error_message: str | None = None,
 ) -> None:
     """Set status (and optional error_message) on a queue item. No-op if item not found."""
-    result = await db.execute(
-        select(DahuaSyncQueue).where(DahuaSyncQueue.id == item_id)
-    )
+    result = await db.execute(select(DahuaSyncQueue).where(DahuaSyncQueue.id == item_id))
     item = result.scalar_one_or_none()
     if item is None:
         return
     item.status = status
     item.error_message = error_message
-    item.executed_at = datetime.now(UTC)
+    item.processed_at = datetime.now(UTC)
     await db.commit()

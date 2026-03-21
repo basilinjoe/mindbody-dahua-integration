@@ -101,9 +101,10 @@ def _build_dahua_csv(users: list[dict]) -> str:
 
 async def _run_export_job(job_id: int, sync_engine) -> None:
     """Background task: run the CSV export. Uses its own async sessions."""
+    from sqlalchemy import select
+
     from app.models.database import AsyncSessionLocal
     from app.models.device import DahuaDevice
-    from sqlalchemy import select
 
     async with AsyncSessionLocal() as db:
         await export_jobs_svc.update(
@@ -175,7 +176,9 @@ async def exports_page(
     """Dedicated exports page."""
     jobs = await export_jobs_svc.list_all(db)
     from sqlalchemy import select as _select
+
     from app.models.device import DahuaDevice as _DahuaDevice
+
     devices_result = await db.execute(
         _select(_DahuaDevice).where(_DahuaDevice.is_enabled.is_(True)).order_by(_DahuaDevice.name)
     )
@@ -242,12 +245,11 @@ async def export_dahua_csv(
 ):
     """Download all users from a single Dahua device as CSV."""
     from sqlalchemy import select as _select
+
     from app.models.device import DahuaDevice as _DahuaDevice
 
     result = await db.execute(
-        _select(_DahuaDevice).where(
-            _DahuaDevice.id == device_id, _DahuaDevice.is_enabled.is_(True)
-        )
+        _select(_DahuaDevice).where(_DahuaDevice.id == device_id, _DahuaDevice.is_enabled.is_(True))
     )
     device = result.scalar_one_or_none()
     if not device:

@@ -22,7 +22,6 @@ from datetime import timedelta
 from prefect import aserve
 from prefect.client.orchestration import get_client
 from prefect.variables import Variable
-
 from sqlalchemy import select
 
 from app.models.database import init_async_db
@@ -47,8 +46,7 @@ async def ensure_concurrency_limits(device_ids: list[int]) -> None:
                 )
                 logger.info("Created concurrency limit: %s (max 2)", tag)
             except Exception:
-                # Already exists — ignore
-                pass
+                logger.debug("Concurrency limit '%s' already exists, skipping", tag)
 
 
 async def _sync_variables_from_env() -> None:
@@ -107,9 +105,7 @@ async def _setup() -> tuple[int, int]:
     # Async DB for Prefect tasks and device list query
     async_factory = init_async_db(database_url)
     async with async_factory() as db:
-        result = await db.execute(
-            select(DahuaDevice.id).where(DahuaDevice.is_enabled.is_(True))
-        )
+        result = await db.execute(select(DahuaDevice.id).where(DahuaDevice.is_enabled.is_(True)))
         device_ids = list(result.scalars().all())
 
     # Register block type with Prefect server

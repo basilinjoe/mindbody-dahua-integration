@@ -1,23 +1,24 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.mark.asyncio
 async def test_health_flow_uses_devices_service_update_status():
     """health.py must call devices_svc.update_status instead of raw inline update()."""
-    import app.sync.flows.health as health_mod
 
     # If the module imports devices service, the attribute will exist
     import app.services.devices as devices_svc
+
     assert callable(devices_svc.update_status)
 
 
 @pytest.mark.asyncio
 async def test_update_status_online_sets_last_seen_at():
-    from app.services.devices import update_status
     from app.models.device import DahuaDevice
+    from app.services.devices import update_status
 
     mock_db = AsyncMock()
     fake_device = MagicMock(spec=DahuaDevice)
@@ -36,8 +37,8 @@ async def test_update_status_online_sets_last_seen_at():
 
 @pytest.mark.asyncio
 async def test_update_status_offline_does_not_set_last_seen_at():
-    from app.services.devices import update_status
     from app.models.device import DahuaDevice
+    from app.services.devices import update_status
 
     mock_db = AsyncMock()
     fake_device = MagicMock(spec=DahuaDevice)

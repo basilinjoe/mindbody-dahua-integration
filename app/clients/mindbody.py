@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -11,6 +12,9 @@ from app.utils.retry import mindbody_retry
 logger = logging.getLogger(__name__)
 
 MINDBODY_PAGE_SIZE = 200  # MindBody API max items per page / bulk request
+
+# Safety margin before token expiry to avoid using a token that expires mid-request
+_TOKEN_REFRESH_MARGIN = timedelta(minutes=30)
 
 
 class MindBodyClient:
@@ -24,6 +28,7 @@ class MindBodyClient:
         self._password = settings.mindbody_password
         self._token: str | None = None
         self._token_expiry: datetime | None = None
+        self._token_lock = asyncio.Lock()
         self._http = httpx.AsyncClient(timeout=30)
 
     async def close(self) -> None:
@@ -34,18 +39,22 @@ class MindBodyClient:
     async def _ensure_token(self) -> str:
         if self._token and self._token_expiry and self._token_expiry > datetime.now(UTC):
             return self._token
-        logger.info("Requesting new MindBody user token")
-        resp = await self._http.post(
-            f"{self._base}/usertoken/issue",
-            headers={"Api-Key": self._api_key, "SiteId": self._site_id},
-            json={"Username": self._username, "Password": self._password},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        self._token = data["AccessToken"]
-        # MindBody tokens are typically valid for ~24h; refresh a bit early
-        self._token_expiry = datetime.now(UTC) + timedelta(hours=23)
-        return self._token
+        async with self._token_lock:
+            # Double-check after acquiring lock (another coroutine may have refreshed)
+            if self._token and self._token_expiry and self._token_expiry > datetime.now(UTC):
+                return self._token
+            logger.info("Requesting new MindBody user token")
+            resp = await self._http.post(
+                f"{self._base}/usertoken/issue",
+                headers={"Api-Key": self._api_key, "SiteId": self._site_id},
+                json={"Username": self._username, "Password": self._password},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            self._token = data["AccessToken"]
+            # MindBody tokens are valid ~24h; refresh early to avoid mid-request expiry
+            self._token_expiry = datetime.now(UTC) + timedelta(hours=23) - _TOKEN_REFRESH_MARGIN
+            return self._token
 
     def _headers(self) -> dict[str, str]:
         return {
@@ -184,4 +193,3 @@ class MindBodyClient:
                 continue
 
         return False
-

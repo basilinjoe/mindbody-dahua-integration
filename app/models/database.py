@@ -50,7 +50,9 @@ def _get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     if AsyncSessionLocal is None:
         import os
 
-        database_url = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@localhost/sync")
+        database_url = os.environ.get(
+            "DATABASE_URL", "postgresql://postgres:postgres@localhost/sync"
+        )
         init_async_db(database_url)
     return AsyncSessionLocal  # type: ignore[return-value]
 

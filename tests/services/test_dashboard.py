@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -15,16 +15,18 @@ def mock_db():
 async def test_get_stats_returns_dict(mock_db):
     from app.services.dashboard import get_stats
 
-    mock_db.execute = AsyncMock(side_effect=[
-        MagicMock(scalar=MagicMock(return_value=100)),  # total_members
-        MagicMock(scalar=MagicMock(return_value=80)),   # active_members
-        MagicMock(scalar=MagicMock(return_value=60)),   # active_with_membership
-        MagicMock(scalar=MagicMock(return_value=3)),    # total_devices
-        MagicMock(scalar=MagicMock(return_value=2)),    # online_devices
-        MagicMock(scalar=MagicMock(return_value=5)),    # pending_queue
-        MagicMock(scalar=MagicMock(return_value=1)),    # failed_queue
-        MagicMock(scalar=MagicMock(return_value=0)),    # failed_24h
-    ])
+    mock_db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar=MagicMock(return_value=100)),  # total_members
+            MagicMock(scalar=MagicMock(return_value=80)),  # active_members
+            MagicMock(scalar=MagicMock(return_value=60)),  # active_with_membership
+            MagicMock(scalar=MagicMock(return_value=3)),  # total_devices
+            MagicMock(scalar=MagicMock(return_value=2)),  # online_devices
+            MagicMock(scalar=MagicMock(return_value=5)),  # pending_queue
+            MagicMock(scalar=MagicMock(return_value=1)),  # failed_queue
+            MagicMock(scalar=MagicMock(return_value=0)),  # failed_24h
+        ]
+    )
 
     stats = await get_stats(mock_db)
     assert stats["total_members"] == 100
@@ -41,16 +43,18 @@ async def test_get_stats_returns_dict(mock_db):
 async def test_get_stats_defaults_none_to_zero(mock_db):
     from app.services.dashboard import get_stats
 
-    mock_db.execute = AsyncMock(side_effect=[
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-        MagicMock(scalar=MagicMock(return_value=None)),
-    ])
+    mock_db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+            MagicMock(scalar=MagicMock(return_value=None)),
+        ]
+    )
 
     stats = await get_stats(mock_db)
     assert all(v == 0 for v in stats.values())

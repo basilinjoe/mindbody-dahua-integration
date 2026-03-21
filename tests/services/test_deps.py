@@ -1,20 +1,23 @@
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio
 async def test_get_async_db_exported_from_deps():
     """get_async_db must be importable from app.api.deps."""
     from app.api.deps import get_async_db
+
     assert callable(get_async_db)
 
 
 @pytest.mark.asyncio
 async def test_get_async_db_yields_session():
-    from app.api.deps import get_async_db
     from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.api.deps import get_async_db
 
     mock_session = AsyncMock(spec=AsyncSession)
     mock_ctx = MagicMock()

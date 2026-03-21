@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -89,6 +90,7 @@ def test_readiness_not_ready_when_dahua_fails(monkeypatch) -> None:
     }
 
 
+@pytest.mark.network
 def test_check_database_helper_true_and_false() -> None:
     engine = create_engine(_TEST_DB_URL)
     session_local = sessionmaker(bind=engine)

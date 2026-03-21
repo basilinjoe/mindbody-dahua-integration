@@ -5,6 +5,7 @@ import json
 import logging
 from collections import Counter
 from datetime import UTC, datetime
+
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
 from prefect.runtime import flow_run
@@ -91,17 +92,36 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         flow_logger.info("No active members — nothing to push")
         return
 
-    active_male_ids: set[str] = {
-        m["Id"] for m in active_members if (m.get("Gender") or "").lower() == "male"
-    }
-    active_female_ids: set[str] = {
-        m["Id"] for m in active_members if (m.get("Gender") or "").lower() == "female"
-    }
+    active_male_ids: set[str] = set()
+    active_female_ids: set[str] = set()
+    ungendered_ids: set[str] = set()
+
+    for m in active_members:
+        gender = (m.get("Gender") or "").lower()
+        mid = m["Id"]
+        if gender == "male":
+            active_male_ids.add(mid)
+        elif gender == "female":
+            active_female_ids.add(mid)
+        else:
+            ungendered_ids.add(mid)
+            # Route to both male and female gates so they aren't excluded
+            active_male_ids.add(mid)
+            active_female_ids.add(mid)
+
     member_map: dict[str, dict] = {m["Id"]: m for m in active_members}
+
+    if ungendered_ids:
+        flow_logger.warning(
+            "%d active member(s) have no gender set — routing to all gates: %s",
+            len(ungendered_ids),
+            ungendered_ids if len(ungendered_ids) <= 10 else f"{len(ungendered_ids)} members",
+        )
     flow_logger.info(
-        "Classified: %d active male, %d active female",
-        len(active_male_ids),
-        len(active_female_ids),
+        "Classified: %d male, %d female, %d ungendered (routed to all)",
+        len(active_male_ids) - len(ungendered_ids),
+        len(active_female_ids) - len(ungendered_ids),
+        len(ungendered_ids),
     )
 
     # ── Step 3: Load devices + membership windows in parallel ──────────────────
@@ -159,8 +179,12 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
             c = Counter(i["action"] for i in items)
             flow_logger.info(
                 "Device %d (%s): enroll=%d deactivate=%d reactivate=%d update_window=%d",
-                device_id, gate_label,
-                c["enroll"], c["deactivate"], c["reactivate"], c["update_window"],
+                device_id,
+                gate_label,
+                c["enroll"],
+                c["deactivate"],
+                c["reactivate"],
+                c["update_window"],
             )
             all_items.extend(items)
 
@@ -168,7 +192,10 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     flow_logger.info(
         "Total planned: %d operations — enroll=%d deactivate=%d reactivate=%d update_window=%d",
         len(all_items),
-        total["enroll"], total["deactivate"], total["reactivate"], total["update_window"],
+        total["enroll"],
+        total["deactivate"],
+        total["reactivate"],
+        total["update_window"],
     )
 
     if not all_items:
@@ -267,9 +294,8 @@ def _plan_device_operations(
                 # Active on device — check if access window needs updating
                 current_valid_end = dahua_user.get("ValidDateEnd") or ""
                 current_valid_start = dahua_user.get("ValidDateStart") or ""
-                if new_valid_end and (
-                    new_valid_end != current_valid_end
-                    or (new_valid_start and new_valid_start != current_valid_start)
+                if (new_valid_end or new_valid_start) and (
+                    new_valid_end != current_valid_end or new_valid_start != current_valid_start
                 ):
                     items.append(
                         {

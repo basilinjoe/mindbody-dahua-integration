@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.main import _seed_admin, _seed_devices, create_app
 from app.models.admin_user import AdminUser
@@ -22,12 +22,21 @@ def test_create_app_registers_stateful_routes_and_static() -> None:
 @pytest.mark.asyncio
 async def test_seed_admin_creates_single_admin_user() -> None:
     from app.config import Settings
+
     settings = Settings(
-        mindbody_api_key="k", mindbody_site_id="s", mindbody_api_base_url="https://x",
-        mindbody_username="u", mindbody_password="p", mindbody_webhook_signature_key="wk",
-        dahua_devices="", dahua_default_host="", dahua_default_password="",
-        database_url="postgresql://localhost/test", admin_username="admin",
-        admin_password="changeme", secret_key="x",
+        mindbody_api_key="k",
+        mindbody_site_id="s",
+        mindbody_api_base_url="https://x",
+        mindbody_username="u",
+        mindbody_password="p",
+        mindbody_webhook_signature_key="wk",
+        dahua_devices="",
+        dahua_default_host="",
+        dahua_default_password="",
+        database_url="postgresql://localhost/test",
+        admin_username="admin",
+        admin_password="changeme",
+        secret_key="x",
     )
 
     mock_db = AsyncMock()
@@ -55,16 +64,26 @@ async def test_seed_admin_creates_single_admin_user() -> None:
 @pytest.mark.asyncio
 async def test_seed_devices_supports_json_array() -> None:
     from app.config import Settings
+
     settings = Settings(
-        mindbody_api_key="k", mindbody_site_id="s", mindbody_api_base_url="https://x",
-        mindbody_username="u", mindbody_password="p", mindbody_webhook_signature_key="wk",
-        dahua_default_host="", dahua_default_password="",
-        database_url="postgresql://localhost/test", admin_username="admin",
-        admin_password="changeme", secret_key="x",
-        dahua_devices=json.dumps([
-            {"name": "Main Gate", "host": "10.0.0.10", "password": "a"},
-            {"name": "Side Gate", "host": "10.0.0.11", "password": "b", "door_ids": "0,1"},
-        ]),
+        mindbody_api_key="k",
+        mindbody_site_id="s",
+        mindbody_api_base_url="https://x",
+        mindbody_username="u",
+        mindbody_password="p",
+        mindbody_webhook_signature_key="wk",
+        dahua_default_host="",
+        dahua_default_password="",
+        database_url="postgresql://localhost/test",
+        admin_username="admin",
+        admin_password="changeme",
+        secret_key="x",
+        dahua_devices=json.dumps(
+            [
+                {"name": "Main Gate", "host": "10.0.0.10", "password": "a"},
+                {"name": "Side Gate", "host": "10.0.0.11", "password": "b", "door_ids": "0,1"},
+            ]
+        ),
     )
 
     mock_db = AsyncMock()
@@ -87,12 +106,21 @@ async def test_seed_devices_supports_json_array() -> None:
 @pytest.mark.asyncio
 async def test_seed_devices_falls_back_to_default_host() -> None:
     from app.config import Settings
+
     settings = Settings(
-        mindbody_api_key="k", mindbody_site_id="s", mindbody_api_base_url="https://x",
-        mindbody_username="u", mindbody_password="p", mindbody_webhook_signature_key="wk",
-        dahua_devices="", dahua_default_host="10.0.0.20", dahua_default_password="pw",
-        database_url="postgresql://localhost/test", admin_username="admin",
-        admin_password="changeme", secret_key="x",
+        mindbody_api_key="k",
+        mindbody_site_id="s",
+        mindbody_api_base_url="https://x",
+        mindbody_username="u",
+        mindbody_password="p",
+        mindbody_webhook_signature_key="wk",
+        dahua_devices="",
+        dahua_default_host="10.0.0.20",
+        dahua_default_password="pw",
+        database_url="postgresql://localhost/test",
+        admin_username="admin",
+        admin_password="changeme",
+        secret_key="x",
     )
 
     mock_db = AsyncMock()

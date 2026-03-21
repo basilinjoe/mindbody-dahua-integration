@@ -147,5 +147,3 @@ async def test_is_member_active_false_for_invalid_dates_and_no_entitlements() ->
         assert await mb.is_member_active("3") is False
     finally:
         await mb.close()
-
-

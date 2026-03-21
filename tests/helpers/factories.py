@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from app.models.admin_user import AdminUser
 from app.models.device import DahuaDevice
+
+
 def make_admin_user(
     username: str = "admin", password: str = "changeme", is_active: bool = True
 ) -> AdminUser:
@@ -31,5 +33,3 @@ def make_device(
         is_enabled=is_enabled,
         status=status,
     )
-
-

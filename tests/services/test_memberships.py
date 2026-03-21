@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, UTC
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -41,7 +40,9 @@ async def test_upsert_batch_skips_empty_contract_id(mock_db):
     from app.services.memberships import upsert_batch
 
     memberships_by_client = {
-        "101": [{"Id": "", "Name": "Bad", "Status": "Active", "StartDate": None, "ExpirationDate": None}]
+        "101": [
+            {"Id": "", "Name": "Bad", "Status": "Active", "StartDate": None, "ExpirationDate": None}
+        ]
     }
     mock_db.execute = AsyncMock()
     mock_db.commit = AsyncMock()
