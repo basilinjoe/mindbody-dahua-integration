@@ -71,6 +71,17 @@ async def get_stats(db: AsyncSession) -> dict:
         )
     ).scalar() or 0
 
+    from datetime import timedelta
+    cutoff_24h = now - timedelta(hours=24)
+    failed_24h = (
+        await db.execute(
+            select(func.count(DahuaSyncQueue.id)).where(
+                DahuaSyncQueue.status == "failed",
+                DahuaSyncQueue.created_at >= cutoff_24h,
+            )
+        )
+    ).scalar() or 0
+
     return {
         "total_members": total_members,
         "active_members": active_members,
@@ -79,32 +90,95 @@ async def get_stats(db: AsyncSession) -> dict:
         "online_devices": online_devices,
         "pending_queue": pending_queue,
         "failed_queue": failed_queue,
+        "failed_24h": failed_24h,
     }
 
 
-async def get_recent_queue(db: AsyncSession, limit: int = 10) -> list[DahuaSyncQueue]:
-    """Return the most recent DahuaSyncQueue rows ordered by created_at descending."""
+async def get_recent_queue(db: AsyncSession, limit: int = 10) -> list[tuple[DahuaSyncQueue, str | None]]:
+    """Return (queue_item, device_name) tuples for the most recent queue rows."""
     result = await db.execute(
-        select(DahuaSyncQueue).order_by(DahuaSyncQueue.created_at.desc()).limit(limit)
+        select(DahuaSyncQueue, DahuaDevice.name)
+        .outerjoin(DahuaDevice, DahuaDevice.id == DahuaSyncQueue.device_id)
+        .order_by(DahuaSyncQueue.created_at.desc())
+        .limit(limit)
     )
-    return list(result.scalars().all())
+    return list(result.all())
 
 
-async def get_mb_breakdown(db: AsyncSession) -> dict[str, int]:
-    """Return {gender_label: count} for active MindBody members."""
-    result = await db.execute(
+async def get_mb_breakdown(db: AsyncSession) -> dict:
+    """Return gender and subscription breakdown for the dashboard."""
+    # Gender breakdown
+    gender_result = await db.execute(
         select(MindBodyClient.gender, func.count(MindBodyClient.id))
         .where(MindBodyClient.active.is_(True))
         .group_by(MindBodyClient.gender)
     )
-    return {(row[0] or "Unknown"): row[1] for row in result}
+    gender_counts = {(row[0] or "Unknown"): row[1] for row in gender_result}
+
+    total = sum(gender_counts.values()) or 1  # avoid division by zero
+    male_count = gender_counts.get("Male", 0)
+    female_count = gender_counts.get("Female", 0)
+
+    # Subscription breakdown
+    active_sub_count = (
+        await db.execute(
+            select(func.count(MindBodyClient.id.distinct()))
+            .join(
+                MindBodyMembership,
+                MindBodyClient.mindbody_id == MindBodyMembership.mindbody_client_id,
+            )
+            .where(
+                MindBodyClient.active.is_(True),
+                MindBodyMembership.is_active.is_(True),
+            )
+        )
+    ).scalar() or 0
+    no_sub_count = sum(gender_counts.values()) - active_sub_count
+
+    return {
+        "male_count": male_count,
+        "male_pct": round(male_count * 100 / total),
+        "female_count": female_count,
+        "female_pct": round(female_count * 100 / total),
+        "active_sub_count": active_sub_count,
+        "active_sub_pct": round(active_sub_count * 100 / total),
+        "no_sub_count": no_sub_count,
+        "no_sub_pct": round(no_sub_count * 100 / total),
+    }
 
 
-async def get_device_rows(db: AsyncSession) -> list[DahuaDevice]:
-    """Return enabled DahuaDevice rows ordered by name."""
-    result = await db.execute(
+async def get_device_rows(db: AsyncSession) -> list[dict]:
+    """Return dicts with device, pending count, and failed_24h count for enabled devices."""
+    from datetime import timedelta
+
+    devices_result = await db.execute(
         select(DahuaDevice)
         .where(DahuaDevice.is_enabled.is_(True))
         .order_by(DahuaDevice.name)
     )
-    return list(result.scalars().all())
+    devices = list(devices_result.scalars().all())
+
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    rows = []
+    for device in devices:
+        pending = (
+            await db.execute(
+                select(func.count(DahuaSyncQueue.id)).where(
+                    DahuaSyncQueue.device_id == device.id,
+                    DahuaSyncQueue.status == "pending",
+                )
+            )
+        ).scalar() or 0
+
+        failed_24h = (
+            await db.execute(
+                select(func.count(DahuaSyncQueue.id)).where(
+                    DahuaSyncQueue.device_id == device.id,
+                    DahuaSyncQueue.status == "failed",
+                    DahuaSyncQueue.created_at >= cutoff,
+                )
+            )
+        ).scalar() or 0
+
+        rows.append({"device": device, "pending": pending, "failed_24h": failed_24h})
+    return rows

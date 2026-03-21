@@ -24,7 +24,7 @@ async def dashboard(
     stats["active_members_pct"] = _pct(stats["active_members"], stats["total_members"])
     stats["devices_total"] = stats["total_devices"]
     stats["devices_online"] = stats["online_devices"]
-    stats["failed_24h"] = stats["failed_queue"]
+    # failed_24h is now computed directly by the service
     stats["success_rate_pct"] = 100
 
     recent_queue = await dashboard_svc.get_recent_queue(db)
@@ -54,7 +54,7 @@ async def stats_partial(
     stats["active_members_pct"] = _pct(stats["active_members"], stats["total_members"])
     stats["devices_total"] = stats["total_devices"]
     stats["devices_online"] = stats["online_devices"]
-    stats["failed_24h"] = stats["failed_queue"]
+    # failed_24h is now computed directly by the service
     stats["success_rate_pct"] = 100
     return request.app.state.templates.TemplateResponse(
         request,
