@@ -18,7 +18,8 @@ from app.api.router import api_router
 from app.clients.mindbody import MindBodyClient
 from app.config import Settings
 from app.models.admin_user import AdminUser
-from app.models.database import Base, async_engine, init_async_db
+import app.models.database as _db
+from app.models.database import Base, init_async_db
 from app.models.device import DahuaDevice
 from app.models.export_job import ExportJob, ExportStatus  # noqa: F401 — registers table
 
@@ -47,7 +48,7 @@ def _build_lifespan(
         async_session_factory = init_async_db(app_settings.database_url)
 
         # Create tables (idempotent; skipped if migrations handle DDL)
-        async with async_engine.begin() as conn:
+        async with _db.async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
         # Seed and recover using a single async session
