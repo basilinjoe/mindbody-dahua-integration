@@ -184,9 +184,9 @@ async def exports_page(
     )
     devices = list(devices_result.scalars().all())
     return request.app.state.templates.TemplateResponse(
+        request,
         "exports/index.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "exports",
             "jobs": jobs,
@@ -219,8 +219,9 @@ async def export_jobs_partial(
     """HTMX partial — returns the export jobs status panel."""
     jobs = await export_jobs_svc.list_all(db)
     return request.app.state.templates.TemplateResponse(
+        request,
         "partials/export_jobs.html",
-        {"request": request, "jobs": jobs},
+        {"jobs": jobs},
     )
 
 

@@ -31,7 +31,8 @@
       "Bash(python -m pytest tests/unit/admin/test_device_user_count.py -v)",
       "Bash(pytest -q)",
       "Bash(python -m pytest tests/unit/admin/ -v)",
-      "Bash(.venv/Scripts/pytest --cov=app --cov-report=term-missing --cov-fail-under=85)"
+      "Bash(.venv/Scripts/pytest --cov=app --cov-report=term-missing --cov-fail-under=85)",
+      "Bash(python -m pytest --cov=app --cov-report=term-missing)"
     ]
   },
   "hooks": {
