@@ -9,16 +9,28 @@ from app.admin.csrf import generate_csrf_token
 @pytest.fixture
 def _seed_sync_engine(app):
     """Ensure app has sync_engine with fake clients."""
-    from tests.helpers.fakes import FakeDahuaClient, FakeMindBodyClient
+    from tests.helpers.fakes import FakeMindBodyClient
 
     class FakeSyncEngine:
         def __init__(self):
-            self.mindbody = FakeMindBodyClient(all_clients=[
-                {"Id": "1", "FirstName": "A", "LastName": "B", "Email": "a@b.com",
-                 "MobilePhone": "", "HomePhone": "", "WorkPhone": "",
-                 "Status": "Active", "Active": True, "BirthDate": "", "Gender": "Male",
-                 "CreationDate": "2025-01-01"},
-            ])
+            self.mindbody = FakeMindBodyClient(
+                all_clients=[
+                    {
+                        "Id": "1",
+                        "FirstName": "A",
+                        "LastName": "B",
+                        "Email": "a@b.com",
+                        "MobilePhone": "",
+                        "HomePhone": "",
+                        "WorkPhone": "",
+                        "Status": "Active",
+                        "Active": True,
+                        "BirthDate": "",
+                        "Gender": "Male",
+                        "CreationDate": "2025-01-01",
+                    },
+                ]
+            )
             self._dahua_clients = {}
 
     app.state.sync_engine = FakeSyncEngine()
@@ -48,9 +60,7 @@ def test_export_all_triggers_background_job(
     assert "/admin/exports" in resp.headers.get("location", "")
 
 
-def test_export_mindbody_csv(
-    logged_in_client: TestClient, _seed_sync_engine
-) -> None:
+def test_export_mindbody_csv(logged_in_client: TestClient, _seed_sync_engine) -> None:
     resp = logged_in_client.get("/admin/exports/mindbody.csv")
     assert resp.status_code == 200
     assert "text/csv" in resp.headers.get("content-type", "")

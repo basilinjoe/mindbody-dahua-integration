@@ -54,12 +54,16 @@ async def test_sync_integration_flow_no_active_members(monkeypatch: pytest.Monke
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "fetch_members", fake_fetch_members)
-    monkeypatch.setattr(integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch)
+    monkeypatch.setattr(
+        integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch
+    )
     monkeypatch.setattr(integration_mod, "fetch_all_memberships", fake_fetch_all_memberships)
     monkeypatch.setattr(
         integration_mod, "upsert_mindbody_memberships_batch", fake_upsert_mindbody_memberships_batch
     )
-    monkeypatch.setattr(integration_mod, "load_active_members_from_db", fake_load_active_members_from_db)
+    monkeypatch.setattr(
+        integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
 
     await integration_mod.sync_integration_flow.fn(sync_type="test")
 
@@ -93,13 +97,19 @@ async def test_sync_integration_flow_no_devices(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "fetch_members", fake_fetch_members)
-    monkeypatch.setattr(integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch)
+    monkeypatch.setattr(
+        integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch
+    )
     monkeypatch.setattr(integration_mod, "fetch_all_memberships", fake_fetch_all_memberships)
     monkeypatch.setattr(
         integration_mod, "upsert_mindbody_memberships_batch", fake_upsert_mindbody_memberships_batch
     )
-    monkeypatch.setattr(integration_mod, "load_active_members_from_db", fake_load_active_members_from_db)
-    monkeypatch.setattr(integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type)
+    monkeypatch.setattr(
+        integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
+    monkeypatch.setattr(
+        integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
+    )
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
 
     await integration_mod.sync_integration_flow.fn(sync_type="test")
@@ -159,13 +169,19 @@ async def test_sync_integration_flow_full_run(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "fetch_members", fake_fetch_members)
-    monkeypatch.setattr(integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch)
+    monkeypatch.setattr(
+        integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch
+    )
     monkeypatch.setattr(integration_mod, "fetch_all_memberships", fake_fetch_all_memberships)
     monkeypatch.setattr(
         integration_mod, "upsert_mindbody_memberships_batch", fake_upsert_mindbody_memberships_batch
     )
-    monkeypatch.setattr(integration_mod, "load_active_members_from_db", fake_load_active_members_from_db)
-    monkeypatch.setattr(integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type)
+    monkeypatch.setattr(
+        integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
+    monkeypatch.setattr(
+        integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
+    )
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
     monkeypatch.setattr(
         integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device
@@ -210,12 +226,16 @@ async def test_sync_integration_flow_dedup_members(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "fetch_members", fake_fetch_members)
-    monkeypatch.setattr(integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch)
+    monkeypatch.setattr(
+        integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch
+    )
     monkeypatch.setattr(integration_mod, "fetch_all_memberships", fake_fetch_all_memberships)
     monkeypatch.setattr(
         integration_mod, "upsert_mindbody_memberships_batch", fake_upsert_mindbody_memberships_batch
     )
-    monkeypatch.setattr(integration_mod, "load_active_members_from_db", fake_load_active_members_from_db)
+    monkeypatch.setattr(
+        integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
 
     await integration_mod.sync_integration_flow.fn(sync_type="test")
 
@@ -269,13 +289,19 @@ async def test_sync_integration_flow_ungendered_members(monkeypatch: pytest.Monk
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "fetch_members", fake_fetch_members)
-    monkeypatch.setattr(integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch)
+    monkeypatch.setattr(
+        integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch
+    )
     monkeypatch.setattr(integration_mod, "fetch_all_memberships", fake_fetch_all_memberships)
     monkeypatch.setattr(
         integration_mod, "upsert_mindbody_memberships_batch", fake_upsert_mindbody_memberships_batch
     )
-    monkeypatch.setattr(integration_mod, "load_active_members_from_db", fake_load_active_members_from_db)
-    monkeypatch.setattr(integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type)
+    monkeypatch.setattr(
+        integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
+    monkeypatch.setattr(
+        integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
+    )
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
     monkeypatch.setattr(
         integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device
@@ -335,13 +361,19 @@ async def test_sync_integration_flow_device_fetch_error(monkeypatch: pytest.Monk
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "fetch_members", fake_fetch_members)
-    monkeypatch.setattr(integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch)
+    monkeypatch.setattr(
+        integration_mod, "upsert_mindbody_users_batch", fake_upsert_mindbody_users_batch
+    )
     monkeypatch.setattr(integration_mod, "fetch_all_memberships", fake_fetch_all_memberships)
     monkeypatch.setattr(
         integration_mod, "upsert_mindbody_memberships_batch", fake_upsert_mindbody_memberships_batch
     )
-    monkeypatch.setattr(integration_mod, "load_active_members_from_db", fake_load_active_members_from_db)
-    monkeypatch.setattr(integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type)
+    monkeypatch.setattr(
+        integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
+    monkeypatch.setattr(
+        integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
+    )
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
     monkeypatch.setattr(
         integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device

@@ -27,9 +27,9 @@ async def device_list(
 ):
     devices = await devices_svc.list_all(db)
     return request.app.state.templates.TemplateResponse(
+        request,
         "devices/list.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "devices",
             "devices": devices,
@@ -40,9 +40,9 @@ async def device_list(
 @router.get("/add", response_class=HTMLResponse)
 async def device_add_form(request: Request):
     return request.app.state.templates.TemplateResponse(
+        request,
         "devices/form.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "devices",
             "device": None,
@@ -84,9 +84,9 @@ async def device_add_submit(
     except IntegrityError:
         await db.rollback()
         return request.app.state.templates.TemplateResponse(
+            request,
             "devices/form.html",
             {
-                "request": request,
                 "session_user": request.state.user,
                 "active_page": "devices",
                 "device": None,
@@ -97,9 +97,9 @@ async def device_add_submit(
         logger.exception("Failed to add device: %s (%s)", name, host)
         await db.rollback()
         return request.app.state.templates.TemplateResponse(
+            request,
             "devices/form.html",
             {
-                "request": request,
                 "session_user": request.state.user,
                 "active_page": "devices",
                 "device": None,
@@ -118,9 +118,9 @@ async def device_edit_form(
     if not device:
         return RedirectResponse(url="/admin/devices", status_code=303)
     return request.app.state.templates.TemplateResponse(
+        request,
         "devices/form.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "devices",
             "device": device,
@@ -164,9 +164,9 @@ async def device_edit_submit(
     except IntegrityError:
         await db.rollback()
         return request.app.state.templates.TemplateResponse(
+            request,
             "devices/form.html",
             {
-                "request": request,
                 "session_user": request.state.user,
                 "active_page": "devices",
                 "device": device,
@@ -177,9 +177,9 @@ async def device_edit_submit(
         logger.exception("Failed to update device %d: %s (%s)", device_id, name, host)
         await db.rollback()
         return request.app.state.templates.TemplateResponse(
+            request,
             "devices/form.html",
             {
-                "request": request,
                 "session_user": request.state.user,
                 "active_page": "devices",
                 "device": device,
@@ -330,9 +330,9 @@ async def device_users(
         await client.close()
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "devices/users.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "devices",
             "device": device,
@@ -379,9 +379,9 @@ async def device_user_detail(
         error = f"User '{user_id}' not found on this device"
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "devices/user_detail.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "devices",
             "device": device,

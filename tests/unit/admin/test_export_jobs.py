@@ -49,9 +49,7 @@ class TestBuildMindbodyCsv:
         assert rows[0]["email"] == ""
 
     def test_multiple_clients(self) -> None:
-        clients = [
-            {"Id": str(i), "FirstName": f"User{i}", "LastName": "L"} for i in range(5)
-        ]
+        clients = [{"Id": str(i), "FirstName": f"User{i}", "LastName": "L"} for i in range(5)]
         result = _build_mindbody_csv(clients)
         reader = csv.DictReader(io.StringIO(result))
         rows = list(reader)

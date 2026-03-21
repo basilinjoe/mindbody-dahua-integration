@@ -59,7 +59,9 @@ async def test_device_health_flow_online(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(health_mod, "load_all_devices", fake_load_all_devices)
     monkeypatch.setattr(health_mod, "check_device_health_task", fake_check_device_health_task)
     monkeypatch.setattr(health_mod, "_get_async_session_factory", fake_get_factory)
-    monkeypatch.setattr(health_mod, "devices_svc", SimpleNamespace(update_status=fake_update_status))
+    monkeypatch.setattr(
+        health_mod, "devices_svc", SimpleNamespace(update_status=fake_update_status)
+    )
     monkeypatch.setattr(health_mod, "create_markdown_artifact", fake_create_markdown_artifact)
 
     await health_mod.device_health_flow.fn()
@@ -106,7 +108,9 @@ async def test_device_health_flow_error(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(health_mod, "load_all_devices", fake_load_all_devices)
     monkeypatch.setattr(health_mod, "check_device_health_task", fake_check_device_health_task)
     monkeypatch.setattr(health_mod, "_get_async_session_factory", fake_get_factory)
-    monkeypatch.setattr(health_mod, "devices_svc", SimpleNamespace(update_status=fake_update_status))
+    monkeypatch.setattr(
+        health_mod, "devices_svc", SimpleNamespace(update_status=fake_update_status)
+    )
     monkeypatch.setattr(health_mod, "create_markdown_artifact", fake_create_markdown_artifact)
 
     await health_mod.device_health_flow.fn()

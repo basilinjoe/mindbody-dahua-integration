@@ -74,9 +74,13 @@ async def test_dahua_push_reactivate_action(monkeypatch: pytest.MonkeyPatch) -> 
 
     items = [
         SimpleNamespace(
-            id=1, action="reactivate", device_id=10,
-            member_snapshot=None, dahua_user_id="100",
-            enrollment_id=None, mindbody_client_id="100",
+            id=1,
+            action="reactivate",
+            device_id=10,
+            member_snapshot=None,
+            dahua_user_id="100",
+            enrollment_id=None,
+            mindbody_client_id="100",
         ),
     ]
     marks: list = []

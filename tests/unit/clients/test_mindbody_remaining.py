@@ -84,9 +84,7 @@ async def test_is_member_active_with_active_membership() -> None:
 
     future_date = (datetime.now(UTC) + timedelta(days=30)).isoformat()
     respx.get("https://mb.test/public/v6/client/activeclientmemberships").mock(
-        return_value=Response(
-            200, json={"ClientMemberships": [{"ExpirationDate": future_date}]}
-        )
+        return_value=Response(200, json={"ClientMemberships": [{"ExpirationDate": future_date}]})
     )
 
     try:
@@ -106,9 +104,7 @@ async def test_is_member_active_no_expiry() -> None:
     client._token_expiry = datetime.now(UTC) + timedelta(hours=1)
 
     respx.get("https://mb.test/public/v6/client/activeclientmemberships").mock(
-        return_value=Response(
-            200, json={"ClientMemberships": [{"ExpirationDate": None}]}
-        )
+        return_value=Response(200, json={"ClientMemberships": [{"ExpirationDate": None}]})
     )
 
     try:
@@ -130,14 +126,10 @@ async def test_is_member_active_expired_membership_falls_back_to_contracts() -> 
     future_date = (datetime.now(UTC) + timedelta(days=30)).isoformat()
 
     respx.get("https://mb.test/public/v6/client/activeclientmemberships").mock(
-        return_value=Response(
-            200, json={"ClientMemberships": [{"ExpirationDate": past_date}]}
-        )
+        return_value=Response(200, json={"ClientMemberships": [{"ExpirationDate": past_date}]})
     )
     respx.get("https://mb.test/public/v6/client/clientcontracts").mock(
-        return_value=Response(
-            200, json={"Contracts": [{"EndDate": future_date}]}
-        )
+        return_value=Response(200, json={"Contracts": [{"EndDate": future_date}]})
     )
 
     try:
@@ -157,9 +149,7 @@ async def test_is_member_active_no_membership_no_contract() -> None:
 
     past = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     respx.get("https://mb.test/public/v6/client/activeclientmemberships").mock(
-        return_value=Response(
-            200, json={"ClientMemberships": [{"ExpirationDate": past}]}
-        )
+        return_value=Response(200, json={"ClientMemberships": [{"ExpirationDate": past}]})
     )
     respx.get("https://mb.test/public/v6/client/clientcontracts").mock(
         return_value=Response(200, json={"Contracts": [{"EndDate": past}]})
@@ -182,9 +172,7 @@ async def test_is_member_active_with_bad_date_in_membership() -> None:
     client._token_expiry = datetime.now(UTC) + timedelta(hours=1)
 
     respx.get("https://mb.test/public/v6/client/activeclientmemberships").mock(
-        return_value=Response(
-            200, json={"ClientMemberships": [{"ExpirationDate": "not-a-date"}]}
-        )
+        return_value=Response(200, json={"ClientMemberships": [{"ExpirationDate": "not-a-date"}]})
     )
     respx.get("https://mb.test/public/v6/client/clientcontracts").mock(
         return_value=Response(200, json={"Contracts": []})

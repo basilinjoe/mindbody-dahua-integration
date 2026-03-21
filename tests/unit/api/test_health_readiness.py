@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.api.health import _check_database, _check_dahua_devices
+from app.api.health import _check_dahua_devices, _check_database
 
 
 class TestCheckDatabase:

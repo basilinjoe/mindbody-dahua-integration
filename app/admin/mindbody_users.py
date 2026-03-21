@@ -100,9 +100,9 @@ async def mindbody_user_list(
     last_fetched_at = await members_svc.get_last_fetched_at(db)
 
     return request.app.state.templates.TemplateResponse(
+        request,
         "mindbody/list.html",
         {
-            "request": request,
             "session_user": request.state.user,
             "active_page": "mindbody_users",
             "clients": clients,
