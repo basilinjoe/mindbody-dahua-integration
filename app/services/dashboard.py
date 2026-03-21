@@ -72,7 +72,7 @@ async def get_stats(db: AsyncSession) -> dict:
     ).scalar() or 0
 
     from datetime import timedelta
-    cutoff_24h = now - timedelta(hours=24)
+    cutoff_24h = (now - timedelta(hours=24)).replace(tzinfo=None)
     failed_24h = (
         await db.execute(
             select(func.count(DahuaSyncQueue.id)).where(
@@ -158,7 +158,7 @@ async def get_device_rows(db: AsyncSession) -> list[dict]:
     )
     devices = list(devices_result.scalars().all())
 
-    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    cutoff = (datetime.now(UTC) - timedelta(hours=24)).replace(tzinfo=None)
     rows = []
     for device in devices:
         pending = (
