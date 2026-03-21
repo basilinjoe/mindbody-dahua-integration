@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, or_, select
+from sqlalchemy.types import DateTime
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_
 
 from app.models.dahua_sync_queue import DahuaSyncQueue
 from app.models.device import DahuaDevice
@@ -38,7 +38,7 @@ async def get_stats(db: AsyncSession) -> dict:
                 MindBodyMembership.is_active.is_(True),
                 or_(
                     MindBodyMembership.expiration_date.is_(None),
-                    MindBodyMembership.expiration_date > now,
+                    cast(MindBodyMembership.expiration_date, DateTime(timezone=True)) > now,
                 ),
             )
         )

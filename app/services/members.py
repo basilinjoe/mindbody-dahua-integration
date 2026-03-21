@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import cast, func, or_, select
+from sqlalchemy.types import DateTime
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,7 +65,7 @@ async def load_active(db: AsyncSession) -> list[MindBodyClient]:
             MindBodyMembership.status == "Active",
             or_(
                 MindBodyMembership.expiration_date.is_(None),
-                MindBodyMembership.expiration_date > datetime.now(UTC),
+                cast(MindBodyMembership.expiration_date, DateTime(timezone=True)) > datetime.now(UTC),
             ),
         )
         .distinct()
