@@ -181,7 +181,9 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         female_device_ids,
     )
 
-    members_with_windows = sum(1 for w in membership_windows.values() if w[0] or w[1])
+    members_with_windows = sum(
+        1 for w in membership_windows.values() if w["valid_start"] or w["valid_end"]
+    )
     members_without_windows = len(membership_windows) - members_with_windows
     if members_without_windows:
         flow_logger.warning(
@@ -300,7 +302,7 @@ def _plan_device_operations(
     active_member_ids: set[str],
     member_map: dict[str, dict],
     dahua_users: list[dict],
-    membership_windows: dict[str, tuple[str | None, str | None]],
+    membership_windows: dict[str, dict],
 ) -> list[dict]:
     """
     Compare active MindBody members against live Dahua device records.
@@ -316,7 +318,9 @@ def _plan_device_operations(
 
     # ── Active members: enroll / reactivate / update_window ───────────────────
     for cid in active_member_ids:
-        start_date, expiration_date = membership_windows.get(cid, (None, None))
+        window = membership_windows.get(cid, {})
+        start_date = window.get("valid_start")
+        expiration_date = window.get("valid_end")
         new_valid_start = _format_dahua_date(start_date)
         new_valid_end = _format_dahua_date(expiration_date)
 

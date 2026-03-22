@@ -23,7 +23,7 @@ def test_plan_updates_window_for_lifetime_membership() -> None:
     ]
     # Lifetime membership: start_date present, expiration_date is None
     membership_windows = {
-        "200": ("2026-01-01T00:00:00Z", None),
+        "200": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": None},
     }
 
     items = integration_mod._plan_device_operations(
@@ -51,7 +51,7 @@ def test_plan_no_op_for_lifetime_no_dates() -> None:
         {"UserID": "300", "CardStatus": "0", "ValidDateStart": "", "ValidDateEnd": ""},
     ]
     membership_windows = {
-        "300": (None, None),
+        "300": {"valid_start": None, "valid_end": None},
     }
 
     items = integration_mod._plan_device_operations(
@@ -80,7 +80,7 @@ def test_plan_updates_when_only_start_changed() -> None:
     ]
     # Start date changed, end date same
     membership_windows = {
-        "400": ("2026-03-01T00:00:00Z", "2026-12-31T23:59:59Z"),
+        "400": {"valid_start": "2026-03-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
     }
 
     items = integration_mod._plan_device_operations(

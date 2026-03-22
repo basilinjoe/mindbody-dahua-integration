@@ -171,8 +171,8 @@ async def test_sync_integration_flow_full_run(monkeypatch: pytest.MonkeyPatch) -
 
     async def fake_load_membership_windows(ids):
         return {
-            "100": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
-            "200": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
+            "100": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
+            "200": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
         }
 
     async def fake_fetch_dahua_users_for_device(device_id):
@@ -301,7 +301,7 @@ async def test_sync_integration_flow_ungendered_members(monkeypatch: pytest.Monk
         return [2]
 
     async def fake_load_membership_windows(ids):
-        return {"100": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")}
+        return {"100": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"}}
 
     async def fake_fetch_dahua_users_for_device(device_id):
         return []
@@ -378,7 +378,7 @@ async def test_sync_integration_flow_device_fetch_error(monkeypatch: pytest.Monk
         return []
 
     async def fake_load_membership_windows(ids):
-        return {"100": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")}
+        return {"100": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"}}
 
     async def fake_fetch_dahua_users_for_device(device_id):
         raise ConnectionError("device unreachable")

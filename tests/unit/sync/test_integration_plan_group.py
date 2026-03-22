@@ -54,9 +54,9 @@ def test_plan_device_operations_creates_all_action_types() -> None:
         {"UserID": "103", "CardStatus": "0", "ValidDateStart": "", "ValidDateEnd": ""},
     ]
     membership_windows = {
-        "101": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),  # expiry changed → update_window
-        "102": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
-        "104": ("2026-02-01T00:00:00Z", "2026-11-30T23:59:59Z"),
+        "101": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},  # expiry changed → update_window
+        "102": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
+        "104": {"valid_start": "2026-02-01T00:00:00Z", "valid_end": "2026-11-30T23:59:59Z"},
     }
 
     items = integration_mod._plan_device_operations(
@@ -132,7 +132,7 @@ def test_plan_device_operations_no_op_when_already_in_sync() -> None:
         },
     ]
     membership_windows = {
-        "101": ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z"),
+        "101": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
     }
 
     items = integration_mod._plan_device_operations(
