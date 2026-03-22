@@ -20,6 +20,10 @@ async def _fake_archive_previous_sync_queue(run_id):
     return 0
 
 
+async def _fake_ensure_timestamps_tz():
+    pass
+
+
 @pytest.mark.asyncio
 async def test_sync_integration_flow_no_members(monkeypatch: pytest.MonkeyPatch) -> None:
     """Flow returns early when no members fetched."""
@@ -29,6 +33,7 @@ async def test_sync_integration_flow_no_members(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )
@@ -60,6 +65,7 @@ async def test_sync_integration_flow_no_active_members(monkeypatch: pytest.Monke
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )
@@ -106,6 +112,7 @@ async def test_sync_integration_flow_no_devices(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )
@@ -181,6 +188,7 @@ async def test_sync_integration_flow_full_run(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )
@@ -241,6 +249,7 @@ async def test_sync_integration_flow_dedup_members(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )
@@ -307,6 +316,7 @@ async def test_sync_integration_flow_ungendered_members(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )
@@ -382,6 +392,7 @@ async def test_sync_integration_flow_device_fetch_error(monkeypatch: pytest.Monk
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
+    monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
     monkeypatch.setattr(
         integration_mod, "archive_previous_sync_queue", _fake_archive_previous_sync_queue
     )

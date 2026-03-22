@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_markdown_artifact
 
-from app.models.database import _get_async_session_factory
+from app.models.database import _get_async_session_factory, ensure_timestamps_tz
 from app.services import devices as devices_svc
 from app.sync.tasks import check_device_health_task, load_all_devices
 
@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 async def device_health_flow() -> None:
     """Check health of all enabled Dahua devices and update DB status."""
     flow_logger = get_run_logger()
+    await ensure_timestamps_tz()
     devices = await load_all_devices()
     flow_logger.info("Checking health of %d devices", len(devices))
 

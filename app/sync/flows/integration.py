@@ -10,6 +10,7 @@ from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
 from prefect.runtime import flow_run
 
+from app.models.database import ensure_timestamps_tz
 from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
     _format_dahua_date,
@@ -43,6 +44,9 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     run_id = str(flow_run.id)
     run_started_at = datetime.now(UTC)
     flow_logger.info("Integration sync started (run_id=%s)", run_id)
+
+    # Ensure DB schema is up to date (idempotent, no-op after first call)
+    await ensure_timestamps_tz()
 
     # ── Step 0: Archive previous queue runs ────────────────────────────────
     try:

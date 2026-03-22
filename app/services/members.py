@@ -11,6 +11,13 @@ from app.models.mindbody_client import MindBodyClient
 from app.models.mindbody_membership import MindBodyMembership
 
 
+def _to_str(value: object) -> str | None:
+    """Coerce a value to str for VARCHAR columns; None stays None."""
+    if value is None:
+        return None
+    return str(value)
+
+
 async def upsert_batch(db: AsyncSession, members: list[dict]) -> int:
     """Upsert a batch of raw MindBody member dicts. Returns number of rows written."""
     now = datetime.now(UTC)
@@ -24,19 +31,19 @@ async def upsert_batch(db: AsyncSession, members: list[dict]) -> int:
         rows.append(
             {
                 "mindbody_id": mid,
-                "unique_id": m.get("UniqueId"),
-                "first_name": m.get("FirstName", ""),
-                "last_name": m.get("LastName", ""),
-                "email": m.get("Email"),
-                "mobile_phone": m.get("MobilePhone"),
-                "home_phone": m.get("HomePhone"),
-                "work_phone": m.get("WorkPhone"),
-                "status": m.get("Status"),
+                "unique_id": _to_str(m.get("UniqueId")),
+                "first_name": _to_str(m.get("FirstName")) or "",
+                "last_name": _to_str(m.get("LastName")) or "",
+                "email": _to_str(m.get("Email")),
+                "mobile_phone": _to_str(m.get("MobilePhone")),
+                "home_phone": _to_str(m.get("HomePhone")),
+                "work_phone": _to_str(m.get("WorkPhone")),
+                "status": _to_str(m.get("Status")),
                 "active": bool(m.get("Active", False)),
-                "birth_date": m.get("BirthDate"),
-                "gender": m.get("Gender"),
-                "created_at_mb": m.get("CreationDate"),
-                "last_modified_at_mb": m.get("LastModifiedDateTime"),
+                "birth_date": _to_str(m.get("BirthDate")),
+                "gender": _to_str(m.get("Gender")),
+                "created_at_mb": _to_str(m.get("CreationDate")),
+                "last_modified_at_mb": _to_str(m.get("LastModifiedDateTime")),
                 "last_fetched_at": now,
             }
         )

@@ -20,12 +20,12 @@ async def upsert_batch(db: AsyncSession, memberships_by_client: dict[str, list[d
                 continue
             rows.append(
                 {
-                    "mindbody_client_id": client_id,
+                    "mindbody_client_id": str(client_id),
                     "membership_id": membership_id,
-                    "membership_name": m.get("Name", ""),
-                    "status": m.get("Status"),
-                    "start_date": m.get("StartDate"),
-                    "expiration_date": m.get("ExpirationDate"),
+                    "membership_name": str(m.get("Name", "") or ""),
+                    "status": str(v) if (v := m.get("Status")) is not None else None,
+                    "start_date": str(v) if (v := m.get("StartDate")) is not None else None,
+                    "expiration_date": str(v) if (v := m.get("ExpirationDate")) is not None else None,
                     "is_active": m.get("Status") == "Active",
                     "last_synced_at": now,
                 }
