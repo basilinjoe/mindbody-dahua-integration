@@ -13,6 +13,7 @@ from prefect.runtime import flow_run
 from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
     _format_dahua_date,
+    archive_previous_sync_queue,
     fetch_all_memberships,
     fetch_dahua_users_for_device,
     fetch_members,
@@ -42,6 +43,14 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     run_id = str(flow_run.id)
     run_started_at = datetime.now(UTC)
     flow_logger.info("Integration sync started (run_id=%s)", run_id)
+
+    # ── Step 0: Archive previous queue runs ────────────────────────────────
+    try:
+        archived = await archive_previous_sync_queue(run_id)
+        if archived:
+            flow_logger.info("Archived %d queue items from previous runs", archived)
+    except Exception:
+        flow_logger.warning("Failed to archive previous queue runs", exc_info=True)
 
     # ── Step 1: Fetch from MindBody ────────────────────────────────────────────
     all_members = await fetch_members()

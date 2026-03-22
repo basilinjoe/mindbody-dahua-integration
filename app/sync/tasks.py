@@ -20,6 +20,7 @@ from app.services import devices as devices_svc
 from app.services import members as members_svc
 from app.services import memberships as memberships_svc
 from app.services import queue as queue_svc
+from app.services import queue_archive as queue_archive_svc
 from app.sync.blocks import MindBodyCredentials
 
 logger = logging.getLogger(__name__)
@@ -242,6 +243,16 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
     """Upsert memberships for each client. Returns total rows written."""
     async with _get_async_session_factory()() as db:
         return await memberships_svc.upsert_batch(db, memberships_by_client)
+
+
+# ── Sync queue archival ──────────────────────────────────────────────────────────
+
+
+@task(name="archive-previous-sync-queue", tags=["db"])
+async def archive_previous_sync_queue(current_run_id: str) -> int:
+    """Archive queue items from previous runs to JSON files, then delete from DB."""
+    async with _get_async_session_factory()() as db:
+        return await queue_archive_svc.archive_previous_runs(db, current_run_id)
 
 
 # ── Dahua sync queue tasks ───────────────────────────────────────────────────────
