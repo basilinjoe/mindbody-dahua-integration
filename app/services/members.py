@@ -42,12 +42,17 @@ async def upsert_batch(db: AsyncSession, members: list[dict]) -> int:
         )
     if not rows:
         return 0
-    stmt = insert(MindBodyClient).values(rows)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["mindbody_id"],
-        set_={k: stmt.excluded[k] for k in rows[0] if k != "mindbody_id"},
-    )
-    await db.execute(stmt)
+    # asyncpg limits query args to 32,767; with 15 columns that's ~2,184 rows max.
+    # Chunk to stay safely under the limit.
+    chunk_size = 1000
+    for i in range(0, len(rows), chunk_size):
+        chunk = rows[i : i + chunk_size]
+        stmt = insert(MindBodyClient).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["mindbody_id"],
+            set_={k: stmt.excluded[k] for k in chunk[0] if k != "mindbody_id"},
+        )
+        await db.execute(stmt)
     await db.commit()
     return len(rows)
 
