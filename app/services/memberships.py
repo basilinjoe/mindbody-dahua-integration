@@ -18,15 +18,18 @@ async def upsert_batch(db: AsyncSession, memberships_by_client: dict[str, list[d
             membership_id = str(m.get("Id", "")).strip()
             if not membership_id:
                 continue
+            # The activeclientsmemberships endpoint returns only active memberships,
+            # so default status/is_active accordingly when the field is absent.
+            raw_status = m.get("Status")
             rows.append(
                 {
                     "mindbody_client_id": str(client_id),
                     "membership_id": membership_id,
                     "membership_name": str(m.get("Name", "") or ""),
-                    "status": str(v) if (v := m.get("Status")) is not None else None,
+                    "status": str(raw_status) if raw_status is not None else "Active",
                     "start_date": str(v) if (v := m.get("StartDate")) is not None else None,
                     "expiration_date": str(v) if (v := m.get("ExpirationDate")) is not None else None,
-                    "is_active": m.get("Status") == "Active",
+                    "is_active": raw_status == "Active" if raw_status is not None else True,
                     "last_synced_at": now,
                 }
             )

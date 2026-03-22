@@ -74,7 +74,7 @@ async def load_active(db: AsyncSession) -> list[MindBodyClient]:
         )
         .where(
             MindBodyClient.active.is_(True),
-            MindBodyMembership.status == "Active",
+            MindBodyMembership.is_active.is_(True),
             or_(
                 MindBodyMembership.expiration_date.is_(None),
                 cast(MindBodyMembership.expiration_date, DateTime(timezone=True))

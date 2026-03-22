@@ -110,8 +110,19 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
 
     # ── Step 2: Load active candidates from DB ─────────────────────────────────
     # Only members marked active in MindBody AND with an active membership qualify.
-    active_members = await load_active_members_from_db()
-    flow_logger.info("Active members with valid membership: %d", len(active_members))
+    active_members_orm = await load_active_members_from_db()
+    flow_logger.info("Active members with valid membership: %d", len(active_members_orm))
+    # Convert ORM objects to dicts matching the format expected by _plan_device_operations
+    active_members = [
+        {
+            "Id": m.mindbody_id,
+            "FirstName": m.first_name,
+            "LastName": m.last_name,
+            "Gender": m.gender,
+            "Email": m.email,
+        }
+        for m in active_members_orm
+    ]
 
     if not active_members:
         flow_logger.info("No active members — nothing to push")

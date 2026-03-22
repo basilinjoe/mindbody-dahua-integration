@@ -146,9 +146,19 @@ class MindBodyClient:
         )
         resp.raise_for_status()
         result: dict[str, list[dict]] = {}
-        for entry in resp.json().get("ClientMemberships", []):
+        raw_entries = resp.json().get("ClientMemberships", [])
+        for entry in raw_entries:
             cid = entry.get("ClientId", "")
             result[cid] = entry.get("Memberships", [])
+        # Log sample membership fields for debugging data-shape issues
+        if raw_entries:
+            sample = raw_entries[0].get("Memberships", [{}])
+            if sample:
+                logger.info(
+                    "Membership sample keys: %s, sample: %s",
+                    list(sample[0].keys()),
+                    {k: sample[0][k] for k in list(sample[0].keys())[:8]},
+                )
         return result
 
     @mindbody_retry
