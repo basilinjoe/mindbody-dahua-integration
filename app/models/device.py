@@ -23,11 +23,13 @@ class DahuaDevice(Base):
     # "male" | "female" | "all" — routing key for gender-based sync
     enable_integration: Mapped[bool] = mapped_column(Boolean, default=True)
     # When False, this device is excluded from all Prefect sync operations
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     status: Mapped[str] = mapped_column(
         String(16), default="unknown"
     )  # online / offline / error / unknown
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self) -> str:
         return f"<DahuaDevice {self.name} ({self.host})>"

@@ -31,7 +31,7 @@ class MindBodyClient(Base):
     created_at_mb: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_modified_at_mb: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_fetched_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     memberships: Mapped[list[MindBodyMembership]] = relationship(

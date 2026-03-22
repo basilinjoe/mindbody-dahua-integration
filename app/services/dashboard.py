@@ -155,7 +155,7 @@ async def get_device_rows(db: AsyncSession) -> list[dict]:
     )
     devices = list(devices_result.scalars().all())
 
-    cutoff = (datetime.now(UTC) - timedelta(hours=24)).replace(tzinfo=None)
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
     rows = []
     for device in devices:
         pending = (

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.templating import Jinja2Templates
@@ -51,6 +51,10 @@ def _build_lifespan(
         # Create tables (idempotent; skipped if migrations handle DDL)
         async with _db.async_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+        # Migrate existing TIMESTAMP columns → TIMESTAMPTZ (no-op on fresh DBs)
+        async with _db.async_engine.begin() as conn:
+            await _migrate_timestamps_to_tz(conn)
 
         # Seed and recover using a single async session
         async with async_session_factory() as db:
@@ -151,6 +155,40 @@ async def _recover_stuck_export_jobs(db: AsyncSession) -> None:
     if stuck:
         await db.commit()
         logging.getLogger("app").info("Reset %d stuck export job(s) to failed", len(stuck))
+
+
+_TIMESTAMP_COLUMNS = [
+    ("dahua_devices", "last_seen_at"),
+    ("dahua_devices", "created_at"),
+    ("dahua_sync_queue", "created_at"),
+    ("dahua_sync_queue", "processed_at"),
+    ("admin_users", "created_at"),
+    ("export_jobs", "created_at"),
+    ("export_jobs", "started_at"),
+    ("export_jobs", "finished_at"),
+    ("mindbody_clients", "last_fetched_at"),
+    ("mindbody_memberships", "last_synced_at"),
+]
+
+
+async def _migrate_timestamps_to_tz(conn) -> None:
+    """ALTER existing TIMESTAMP columns to TIMESTAMPTZ for asyncpg tz-aware datetime compat."""
+    logger = logging.getLogger("app")
+    dialect = conn.dialect.name
+    if dialect != "postgresql":
+        return
+    for table, column in _TIMESTAMP_COLUMNS:
+        try:
+            await conn.execute(
+                text(
+                    f"ALTER TABLE {table} "  # noqa: S608
+                    f"ALTER COLUMN {column} TYPE TIMESTAMPTZ "
+                    f"USING {column} AT TIME ZONE 'UTC'"
+                )
+            )
+        except Exception:
+            pass  # Column may not exist yet or already be TIMESTAMPTZ
+    logger.info("Ensured all timestamp columns are timezone-aware")
 
 
 def create_app(
