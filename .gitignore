@@ -13,6 +13,7 @@ venv/
 .vscode/
 *.log
 extracts/
+app/exports/
 .worktrees/
 
 # Coverage
