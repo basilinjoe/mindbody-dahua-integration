@@ -109,10 +109,16 @@ async def fetch_members(modified_since: datetime | None = None) -> list[dict]:
     Cached 5 min so concurrent flows share the same API call.
     Uses request.lastModifiedDate — the correct spec parameter name.
     """
+    logger.info(
+        "fetch_members: starting (modified_since=%s)",
+        modified_since.isoformat() if modified_since else "None (full fetch)",
+    )
     creds = await MindBodyCredentials.load("production")
     client = MindBodyClient(settings=_settings_from_creds(creds))
     try:
-        return await client.get_all_clients(modified_since=modified_since)
+        members = await client.get_all_clients(modified_since=modified_since)
+        logger.info("fetch_members: returned %d members", len(members))
+        return members
     finally:
         await client.close()
 
@@ -203,13 +209,18 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
     Uses the bulk endpoint (/activeclientsmemberships) in batches of 200.
     """
     if not client_ids:
+        logger.info("fetch_all_memberships: no client IDs provided, skipping")
         return {}
 
+    logger.info("fetch_all_memberships: fetching for %d client IDs", len(client_ids))
     creds = await MindBodyCredentials.load("production")
     client = MindBodyClient(settings=_settings_from_creds(creds))
     try:
         batch_size = MINDBODY_PAGE_SIZE
         batches = [client_ids[i : i + batch_size] for i in range(0, len(client_ids), batch_size)]
+        logger.info(
+            "fetch_all_memberships: split into %d batches of up to %d", len(batches), batch_size
+        )
         sem = asyncio.Semaphore(3)
 
         async def _fetch(batch: list[str]):
@@ -221,28 +232,46 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
         await client.close()
 
     result: dict[str, list[dict]] = {}
+    failed_batches = 0
     for batch, chunk in zip(batches, chunks, strict=True):
         if isinstance(chunk, Exception):
+            failed_batches += 1
             logger.warning(
                 "Bulk membership fetch failed for batch of %d — skipping: %s", len(batch), chunk
             )
         else:
             result.update(chunk)
+    logger.info(
+        "fetch_all_memberships: got memberships for %d clients (%d batches failed)",
+        len(result),
+        failed_batches,
+    )
     return result
 
 
 @task(name="upsert-mindbody-users-batch", tags=["db"])
 async def upsert_mindbody_users_batch(members: list[dict]) -> int:
     """Upsert MindBody user details into the mindbody_clients table. Returns rows written."""
+    logger.info("upsert_mindbody_users_batch: upserting %d members", len(members))
     async with _get_async_session_factory()() as db:
-        return await members_svc.upsert_batch(db, members)
+        count = await members_svc.upsert_batch(db, members)
+    logger.info("upsert_mindbody_users_batch: wrote %d rows", count)
+    return count
 
 
 @task(name="upsert-mindbody-memberships-batch", tags=["db"])
 async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, list[dict]]) -> int:
     """Upsert memberships for each client. Returns total rows written."""
+    total_records = sum(len(v) for v in memberships_by_client.values())
+    logger.info(
+        "upsert_mindbody_memberships_batch: %d clients, %d membership records",
+        len(memberships_by_client),
+        total_records,
+    )
     async with _get_async_session_factory()() as db:
-        return await memberships_svc.upsert_batch(db, memberships_by_client)
+        count = await memberships_svc.upsert_batch(db, memberships_by_client)
+    logger.info("upsert_mindbody_memberships_batch: wrote %d rows", count)
+    return count
 
 
 # ── Sync queue archival ──────────────────────────────────────────────────────────
@@ -303,9 +332,21 @@ async def fetch_dahua_users_for_device(device_id: int) -> list[dict]:
     Returns list of dicts with UserID, CardStatus, ValidDateStart, ValidDateEnd, CardName, etc.
     UserID on the device matches mindbody_id for integer client IDs.
     """
-    client, _ = await _get_dahua_client(device_id)
+    logger.info("fetch_dahua_users_for_device: device=%d — connecting", device_id)
+    client, device = await _get_dahua_client(device_id)
     try:
-        return await client.get_all_users()
+        users = await client.get_all_users()
+        active = sum(1 for u in users if str(u.get("CardStatus", "0")) != "4")
+        frozen = len(users) - active
+        logger.info(
+            "fetch_dahua_users_for_device: device=%d (%s) — %d users (%d active, %d frozen)",
+            device_id,
+            device.name,
+            len(users),
+            active,
+            frozen,
+        )
+        return users
     finally:
         await client.close()
 

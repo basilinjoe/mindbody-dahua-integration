@@ -21,8 +21,8 @@ class _DummyLogger:
 @pytest.mark.asyncio
 async def test_device_health_flow_online(monkeypatch: pytest.MonkeyPatch) -> None:
     devices = [
-        SimpleNamespace(id=1, name="Gate1", host="10.0.0.1"),
-        SimpleNamespace(id=2, name="Gate2", host="10.0.0.2"),
+        SimpleNamespace(id=1, name="Gate1", host="10.0.0.1", port=80),
+        SimpleNamespace(id=2, name="Gate2", host="10.0.0.2", port=80),
     ]
     statuses_updated: list[tuple] = []
 
@@ -55,6 +55,10 @@ async def test_device_health_flow_online(monkeypatch: pytest.MonkeyPatch) -> Non
     async def fake_create_markdown_artifact(**kwargs) -> None:
         pass
 
+    async def fake_ensure_timestamps_tz():
+        pass
+
+    monkeypatch.setattr(health_mod, "ensure_timestamps_tz", fake_ensure_timestamps_tz)
     monkeypatch.setattr(health_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(health_mod, "load_all_devices", fake_load_all_devices)
     monkeypatch.setattr(health_mod, "check_device_health_task", fake_check_device_health_task)
@@ -72,7 +76,7 @@ async def test_device_health_flow_online(monkeypatch: pytest.MonkeyPatch) -> Non
 
 @pytest.mark.asyncio
 async def test_device_health_flow_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    devices = [SimpleNamespace(id=1, name="Gate1", host="10.0.0.1")]
+    devices = [SimpleNamespace(id=1, name="Gate1", host="10.0.0.1", port=80)]
     statuses_updated: list[tuple] = []
 
     async def fake_load_all_devices():
@@ -104,6 +108,10 @@ async def test_device_health_flow_error(monkeypatch: pytest.MonkeyPatch) -> None
     async def fake_create_markdown_artifact(**kwargs) -> None:
         pass
 
+    async def fake_ensure_timestamps_tz():
+        pass
+
+    monkeypatch.setattr(health_mod, "ensure_timestamps_tz", fake_ensure_timestamps_tz)
     monkeypatch.setattr(health_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(health_mod, "load_all_devices", fake_load_all_devices)
     monkeypatch.setattr(health_mod, "check_device_health_task", fake_check_device_health_task)

@@ -30,7 +30,17 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
 
     items = await load_pending_queue_items(run_id)
     push_enabled_raw = await Variable.aget("dahua_push_enabled", default="true")
-    flow_logger.info("Loaded %d pending queue items", len(items))
+    flow_logger.info("Loaded %d pending queue items for run_id=%s", len(items), run_id)
+    if items:
+        from collections import Counter
+
+        action_counts = Counter(i.action for i in items)
+        device_counts = Counter(i.device_id for i in items)
+        flow_logger.info(
+            "Queue breakdown — by action: %s, by device: %s",
+            dict(action_counts),
+            dict(device_counts),
+        )
 
     push_enabled = str(push_enabled_raw).lower().strip()
     if push_enabled != "true":
@@ -60,17 +70,50 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
     }
 
     async def _execute(item):
+        logger.info(
+            "Executing queue item %d: action=%s device=%d client=%s",
+            item.id,
+            item.action,
+            item.device_id,
+            item.mindbody_client_id,
+        )
         try:
             if item.action == "enroll":
                 member = json.loads(item.member_snapshot or "{}")
+                logger.info(
+                    "  Enrolling client=%s on device=%d (name=%s %s, window=%s→%s)",
+                    item.mindbody_client_id,
+                    item.device_id,
+                    member.get("FirstName", ""),
+                    member.get("LastName", ""),
+                    member.get("valid_start"),
+                    member.get("valid_end"),
+                )
                 result = await enroll_on_device(item.device_id, member)
                 success = bool(result)
             elif item.action == "deactivate":
+                logger.info(
+                    "  Deactivating user=%s on device=%d",
+                    item.dahua_user_id,
+                    item.device_id,
+                )
                 success = await deactivate_on_device(item.device_id, item.dahua_user_id)
             elif item.action == "reactivate":
+                logger.info(
+                    "  Reactivating user=%s on device=%d",
+                    item.dahua_user_id,
+                    item.device_id,
+                )
                 success = await reactivate_on_device(item.device_id, item.dahua_user_id)
             elif item.action == "update_window":
                 window = json.loads(item.member_snapshot or "{}")
+                logger.info(
+                    "  Updating window for user=%s on device=%d: %s→%s",
+                    item.dahua_user_id,
+                    item.device_id,
+                    window.get("valid_start"),
+                    window.get("valid_end"),
+                )
                 success = await update_window_on_device(
                     item.device_id,
                     item.dahua_user_id,
@@ -82,9 +125,11 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
 
             if success:
                 await mark_queue_item(item.id, "success")
+                logger.info("  Item %d succeeded", item.id)
                 return item.action, None
             else:
                 await mark_queue_item(item.id, "failed", "Device returned failure")
+                logger.warning("  Item %d: device returned failure", item.id)
                 return item.action, "Device returned failure"
 
         except Exception as exc:

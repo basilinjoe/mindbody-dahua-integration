@@ -43,7 +43,12 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     flow_logger = get_run_logger()
     run_id = str(flow_run.id)
     run_started_at = datetime.now(UTC)
-    flow_logger.info("Integration sync started (run_id=%s)", run_id)
+    flow_logger.info(
+        "Integration sync started (run_id=%s, sync_type=%s, ts=%s)",
+        run_id,
+        sync_type,
+        run_started_at.isoformat(),
+    )
 
     # Ensure DB schema is up to date (idempotent, no-op after first call)
     await ensure_timestamps_tz()
@@ -85,16 +90,23 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     # Upsert ALL members (including inactive) so the DB reflects current active status.
     # Only fetch memberships for active members to avoid unnecessary API calls.
     active_client_ids = [str(m["Id"]) for m in active_members_from_api if m.get("Id")]
-    _, memberships_by_client = await asyncio.gather(
+    flow_logger.info(
+        "Starting parallel upsert (%d total members) + membership fetch (%d active client IDs)",
+        len(all_members),
+        len(active_client_ids),
+    )
+    upsert_count, memberships_by_client = await asyncio.gather(
         upsert_mindbody_users_batch(all_members),
         fetch_all_memberships(active_client_ids),
     )
-    await upsert_mindbody_memberships_batch(memberships_by_client)
     flow_logger.info(
-        "Upserted %d clients to local DB (%d active, memberships fetched for active)",
-        len(all_members),
-        len(active_members_from_api),
+        "Upserted %d client rows to local DB; fetched memberships for %d clients (%d total membership records)",
+        upsert_count,
+        len(memberships_by_client),
+        sum(len(v) for v in memberships_by_client.values()),
     )
+    membership_upsert_count = await upsert_mindbody_memberships_batch(memberships_by_client)
+    flow_logger.info("Upserted %d membership rows to local DB", membership_upsert_count)
 
     # ── Step 2: Load active candidates from DB ─────────────────────────────────
     # Only members marked active in MindBody AND with an active membership qualify.
@@ -152,6 +164,20 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         len(female_device_ids),
     )
 
+    flow_logger.info(
+        "Male gate device IDs: %s, Female gate device IDs: %s",
+        male_device_ids,
+        female_device_ids,
+    )
+
+    members_with_windows = sum(1 for w in membership_windows.values() if w[0] or w[1])
+    members_without_windows = len(membership_windows) - members_with_windows
+    if members_without_windows:
+        flow_logger.warning(
+            "%d active member(s) have no membership window dates (start/end both null)",
+            members_without_windows,
+        )
+
     all_device_ids = list(dict.fromkeys(male_device_ids + female_device_ids))
     if not all_device_ids:
         flow_logger.warning(
@@ -199,6 +225,17 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
                 c["reactivate"],
                 c["update_window"],
             )
+            # Log individual member IDs per action for debugging
+            for action in ("enroll", "deactivate", "reactivate", "update_window"):
+                action_ids = [i["mindbody_client_id"] for i in items if i["action"] == action]
+                if action_ids:
+                    flow_logger.info(
+                        "  Device %d → %s (%d): %s",
+                        device_id,
+                        action,
+                        len(action_ids),
+                        action_ids if len(action_ids) <= 20 else f"{action_ids[:20]}... (+{len(action_ids) - 20} more)",
+                    )
             all_items.extend(items)
 
     total = Counter(i["action"] for i in all_items)
@@ -216,8 +253,11 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         return
 
     # ── Step 6: Write queue + execute ─────────────────────────────────────────
+    flow_logger.info("Writing %d items to sync queue (run_id=%s)", len(all_items), run_id)
     await write_sync_queue_batch(run_id, all_items)
 
+    push_start = datetime.now(UTC)
+    flow_logger.info("Starting Dahua push phase")
     push_stats = await run_dahua_push(run_id, flow_logger)
 
     await create_table_artifact(
@@ -234,7 +274,14 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
             f"run_id: `{run_id}`"
         ),
     )
-    flow_logger.info("Sync complete — %s", push_stats)
+    elapsed = (datetime.now(UTC) - run_started_at).total_seconds()
+    push_elapsed = (datetime.now(UTC) - push_start).total_seconds()
+    flow_logger.info(
+        "Sync complete — push took %.1fs, total %.1fs — %s",
+        push_elapsed,
+        elapsed,
+        push_stats,
+    )
 
 
 def _plan_device_operations(

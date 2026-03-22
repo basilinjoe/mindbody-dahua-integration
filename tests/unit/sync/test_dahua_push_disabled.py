@@ -18,7 +18,7 @@ async def test_dahua_push_disabled_skips_all(monkeypatch: pytest.MonkeyPatch) ->
     """When dahua_push_enabled=false, all items are skipped."""
     from types import SimpleNamespace
 
-    items = [SimpleNamespace(id=1, action="enroll")]
+    items = [SimpleNamespace(id=1, action="enroll", device_id=10, mindbody_client_id="100")]
 
     async def fake_load_pending_queue_items(run_id):
         return items
