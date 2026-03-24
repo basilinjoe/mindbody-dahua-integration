@@ -51,7 +51,9 @@ class AdminAuthMiddleware(BaseHTTPMiddleware):
             if request.method in ("POST", "DELETE") and path not in _CSRF_EXEMPT_PATHS:
                 secret_key = request.app.state.settings.secret_key
                 form = await request.form()
-                csrf_token = form.get("csrf_token", "")
+                csrf_token = form.get("csrf_token", "") or request.query_params.get(
+                    "csrf_token", ""
+                )
                 if not validate_csrf_token(csrf_token, secret_key):
                     logger.warning(
                         "CSRF validation failed for %s %s (user=%s)", request.method, path, user
