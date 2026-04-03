@@ -191,38 +191,85 @@ class DahuaClient:
 
     # ---- Record Querying ---------------------------------------------------
 
-    @dahua_retry
+    _FIND_PAGE_SIZE = 100
+
     async def get_all_users(self) -> list[dict]:
         """
         Query all AccessControlCard records on the device.
+        Paginates via offset/count because the device caps results per request.
         Returns parsed list of user dicts.
         """
+        all_records: list[dict] = []
+        offset = 0
+
+        while True:
+            resp = await self._find_page(offset)
+            if resp is None:
+                break
+            page_records, found, total_count = resp
+            all_records.extend(page_records)
+
+            if total_count is not None and len(all_records) >= total_count:
+                break
+            if found < self._FIND_PAGE_SIZE:
+                break
+            offset += found
+
+        logger.info(
+            "get_all_users on %s: fetched %d records (pages: %d)",
+            self.device_name,
+            len(all_records),
+            (offset // self._FIND_PAGE_SIZE) + 1,
+        )
+        return all_records
+
+    @dahua_retry
+    async def _find_page(self, offset: int) -> tuple[list[dict], int, int | None] | None:
+        """Fetch one page of AccessControlCard records. Returns (records, found, totalCount)."""
         resp = await self._get(
             "/cgi-bin/recordFinder.cgi",
-            {"action": "find", "name": "AccessControlCard", "count": "10000"},
+            {
+                "action": "find",
+                "name": "AccessControlCard",
+                "count": str(self._FIND_PAGE_SIZE),
+                "offset": str(offset),
+            },
         )
         if resp.status_code != 200:
             logger.error("get_all_users failed on %s: %s", self.device_name, resp.text[:300])
-            return []
-        return self._parse_record_finder_response(resp.text)
+            return None
+        records, found, total_count = self._parse_record_finder_response(resp.text)
+        return records, found, total_count
 
-    def _parse_record_finder_response(self, text: str) -> list[dict]:
-        """Parse the key=value response from recordFinder.cgi into a list of dicts."""
+    def _parse_record_finder_response(self, text: str) -> tuple[list[dict], int, int | None]:
+        """Parse the key=value response from recordFinder.cgi.
+
+        Returns (records, found, totalCount).
+        """
         records: dict[int, dict] = {}
+        found = 0
+        total_count: int | None = None
         for line in text.strip().splitlines():
             line = line.strip()
             if not line or "=" not in line:
                 continue
             key, _, value = line.partition("=")
-            # e.g. records[0].CardName=John
-            if key.startswith("records["):
+            if key == "found":
+                found = int(value)
+            elif key == "totalCount":
+                total_count = int(value)
+            elif key.startswith("records["):
                 bracket_end = key.index("]")
                 idx = int(key[len("records[") : bracket_end])
                 field = key[bracket_end + 2 :]  # skip "].
                 if idx not in records:
                     records[idx] = {}
                 records[idx][field] = value
-        return list(records.values())
+        record_list = list(records.values())
+        # Use parsed record count as fallback if 'found' field was absent
+        if found == 0 and record_list:
+            found = len(record_list)
+        return record_list, found, total_count
 
     async def get_user(self, user_id: str) -> dict | None:
         """Look up a single user by UserID."""

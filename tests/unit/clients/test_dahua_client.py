@@ -165,6 +165,8 @@ async def test_parse_record_finder_response_and_get_all_users(
 ) -> None:
     client = DahuaClient("127.0.0.1")
     payload = (
+        "totalCount=2\n"
+        "found=2\n"
         "records[0].UserID=1\n"
         "records[0].CardName=Alice\n"
         "records[0].CardNo=MB00000001\n"
@@ -184,6 +186,41 @@ async def test_parse_record_finder_response_and_get_all_users(
     assert len(users) == 2
     assert users[0]["UserID"] == "1"
     assert users[1]["CardName"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_get_all_users_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When totalCount > page size, get_all_users fetches multiple pages."""
+    client = DahuaClient("127.0.0.1")
+    page1 = (
+        "totalCount=3\n"
+        "found=2\n"
+        "records[0].UserID=1\n"
+        "records[0].CardName=Alice\n"
+        "records[1].UserID=2\n"
+        "records[1].CardName=Bob\n"
+    )
+    page2 = "totalCount=3\nfound=1\nrecords[0].UserID=3\nrecords[0].CardName=Carol\n"
+    call_count = 0
+
+    async def fake_get(path: str, params=None):  # noqa: ANN001, ANN202
+        nonlocal call_count
+        call_count += 1
+        if params.get("offset") == "0":
+            return DummyResponse(200, page1)
+        return DummyResponse(200, page2)
+
+    # Use a small page size so we can test pagination with few records
+    monkeypatch.setattr(client, "_FIND_PAGE_SIZE", 2)
+    monkeypatch.setattr(client, "_get", fake_get)
+    try:
+        users = await client.get_all_users()
+    finally:
+        await client.close()
+
+    assert len(users) == 3
+    assert users[2]["CardName"] == "Carol"
+    assert call_count == 2
 
 
 @pytest.mark.asyncio
