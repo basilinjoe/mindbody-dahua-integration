@@ -9,6 +9,12 @@
       <h1 class="text-sm font-semibold text-gray-900">Dahua Sync Queue</h1>
       <span class="text-xs text-gray-400">{{ total }} item{{ 's' if total != 1 else '' }}</span>
     </div>
+    <a href="/admin/sync-queue/export.csv?run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}"
+       hx-boost="false"
+       class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+      Export CSV
+    </a>
   </div>
 
   <!-- Table card -->
@@ -80,47 +86,16 @@
             <th class="text-left px-3 py-2 font-medium text-gray-500">Created</th>
             <th class="text-left px-3 py-2 font-medium text-gray-500">Processed</th>
             <th class="text-left px-3 py-2 font-medium text-gray-500">Error</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
           {% for item in items %}
-          <tr class="hover:bg-gray-50 transition">
-            <td class="px-3 py-1.5 text-gray-500 font-mono">{{ item.id }}</td>
-            <td class="px-3 py-1.5 font-mono text-gray-600" title="{{ item.run_id }}">{{ item.run_id[:12] }}…</td>
-            <td class="px-3 py-1.5">
-              <span class="text-gray-800 font-medium">{{ item.client_name }}</span>
-              <span class="text-gray-400 ml-1">{{ item.mindbody_client_id }}</span>
-            </td>
-            <td class="px-3 py-1.5 text-gray-600">{{ item.device_name }}</td>
-            <td class="px-3 py-1.5">
-              <span class="px-1.5 py-0.5 rounded text-xs font-medium
-                {% if item.action == 'enroll' %}bg-blue-50 text-blue-700
-                {% elif item.action == 'deactivate' %}bg-red-50 text-red-700
-                {% elif item.action == 'reactivate' %}bg-green-50 text-green-700
-                {% elif item.action == 'update_window' %}bg-purple-50 text-purple-700
-                {% else %}bg-gray-100 text-gray-600{% endif %}">
-                {{ item.action }}
-              </span>
-            </td>
-            <td class="px-3 py-1.5">
-              {% if item.status == 'success' %}
-              <span class="inline-flex items-center gap-1 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>success</span>
-              {% elif item.status == 'failed' %}
-              <span class="inline-flex items-center gap-1 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>failed</span>
-              {% else %}
-              <span class="inline-flex items-center gap-1 text-yellow-700"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>pending</span>
-              {% endif %}
-            </td>
-            <td class="px-3 py-1.5 text-gray-500">{{ item.created_at.strftime('%b %d %H:%M') if item.created_at else '—' }}</td>
-            <td class="px-3 py-1.5 text-gray-500">{{ item.processed_at.strftime('%b %d %H:%M') if item.processed_at else '—' }}</td>
-            <td class="px-3 py-1.5 text-red-600 max-w-xs truncate" title="{{ item.error_message or '' }}">
-              {{ item.error_message or '' }}
-            </td>
-          </tr>
+          {% include "sync_queue/_row.html" %}
           {% endfor %}
           {% if not items %}
           <tr>
-            <td colspan="9" class="px-3 py-10 text-center text-gray-400">No queue items found</td>
+            <td colspan="10" class="px-3 py-10 text-center text-gray-400">No queue items found</td>
           </tr>
           {% endif %}
         </tbody>

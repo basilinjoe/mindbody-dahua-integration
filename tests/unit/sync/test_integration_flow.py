@@ -104,7 +104,11 @@ async def test_sync_integration_flow_no_devices(monkeypatch: pytest.MonkeyPatch)
         return 0
 
     async def fake_load_active_members_from_db():
-        return [SimpleNamespace(mindbody_id="100", gender="Male", first_name="A", last_name="B", email=None)]
+        return [
+            SimpleNamespace(
+                mindbody_id="100", gender="Male", first_name="A", last_name="B", email=None
+            )
+        ]
 
     async def fake_load_device_ids_by_gate_type(gt):
         return []
@@ -160,8 +164,12 @@ async def test_sync_integration_flow_full_run(monkeypatch: pytest.MonkeyPatch) -
 
     async def fake_load_active_members_from_db():
         return [
-            SimpleNamespace(mindbody_id="100", gender="Female", first_name="Alice", last_name="A", email=None),
-            SimpleNamespace(mindbody_id="200", gender="Male", first_name="Bob", last_name="B", email=None),
+            SimpleNamespace(
+                mindbody_id="100", gender="Female", first_name="Alice", last_name="A", email=None
+            ),
+            SimpleNamespace(
+                mindbody_id="200", gender="Male", first_name="Bob", last_name="B", email=None
+            ),
         ]
 
     async def fake_load_device_ids_by_gate_type(gt):
@@ -293,7 +301,11 @@ async def test_sync_integration_flow_ungendered_members(monkeypatch: pytest.Monk
         return 0
 
     async def fake_load_active_members_from_db():
-        return [SimpleNamespace(mindbody_id="100", gender=None, first_name="A", last_name="B", email=None)]
+        return [
+            SimpleNamespace(
+                mindbody_id="100", gender=None, first_name="A", last_name="B", email=None
+            )
+        ]
 
     async def fake_load_device_ids_by_gate_type(gt):
         if gt == "male":
@@ -370,7 +382,11 @@ async def test_sync_integration_flow_device_fetch_error(monkeypatch: pytest.Monk
         return 0
 
     async def fake_load_active_members_from_db():
-        return [SimpleNamespace(mindbody_id="100", gender="Male", first_name="A", last_name="B", email=None)]
+        return [
+            SimpleNamespace(
+                mindbody_id="100", gender="Male", first_name="A", last_name="B", email=None
+            )
+        ]
 
     async def fake_load_device_ids_by_gate_type(gt):
         if gt == "male":

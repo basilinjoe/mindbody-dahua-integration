@@ -28,7 +28,9 @@ async def upsert_batch(db: AsyncSession, memberships_by_client: dict[str, list[d
                     "membership_name": str(m.get("Name", "") or ""),
                     "status": str(raw_status) if raw_status is not None else "Active",
                     "start_date": str(v) if (v := m.get("StartDate")) is not None else None,
-                    "expiration_date": str(v) if (v := m.get("ExpirationDate")) is not None else None,
+                    "expiration_date": str(v)
+                    if (v := m.get("ExpirationDate")) is not None
+                    else None,
                     "is_active": raw_status == "Active" if raw_status is not None else True,
                     "last_synced_at": now,
                 }

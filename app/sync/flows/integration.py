@@ -247,7 +247,9 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
                         device_id,
                         action,
                         len(action_ids),
-                        action_ids if len(action_ids) <= 20 else f"{action_ids[:20]}... (+{len(action_ids) - 20} more)",
+                        action_ids
+                        if len(action_ids) <= 20
+                        else f"{action_ids[:20]}... (+{len(action_ids) - 20} more)",
                     )
             all_items.extend(items)
 

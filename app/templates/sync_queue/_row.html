@@ -1,0 +1,50 @@
+<tr id="queue-row-{{ item.id }}" class="hover:bg-gray-50 transition">
+  <td class="px-3 py-1.5 text-gray-500 font-mono">{{ item.id }}</td>
+  <td class="px-3 py-1.5 font-mono text-gray-600" title="{{ item.run_id }}">{{ item.run_id[:12] }}…</td>
+  <td class="px-3 py-1.5">
+    <span class="text-gray-800 font-medium">{{ item.client_name }}</span>
+    <span class="text-gray-400 ml-1">{{ item.mindbody_client_id }}</span>
+  </td>
+  <td class="px-3 py-1.5 text-gray-600">{{ item.device_name }}</td>
+  <td class="px-3 py-1.5">
+    <span class="px-1.5 py-0.5 rounded text-xs font-medium
+      {% if item.action == 'enroll' %}bg-blue-50 text-blue-700
+      {% elif item.action == 'deactivate' %}bg-red-50 text-red-700
+      {% elif item.action == 'reactivate' %}bg-green-50 text-green-700
+      {% elif item.action == 'update_window' %}bg-purple-50 text-purple-700
+      {% else %}bg-gray-100 text-gray-600{% endif %}">
+      {{ item.action }}
+    </span>
+  </td>
+  <td class="px-3 py-1.5">
+    {% if item.status == 'success' %}
+    <span class="inline-flex items-center gap-1 text-green-700"><span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>success</span>
+    {% elif item.status == 'failed' %}
+    <span class="inline-flex items-center gap-1 text-red-700"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>failed</span>
+    {% else %}
+    <span class="inline-flex items-center gap-1 text-yellow-700"><span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>pending</span>
+    {% endif %}
+  </td>
+  <td class="px-3 py-1.5 text-gray-500">{{ item.created_at.strftime('%b %d %H:%M') if item.created_at else '—' }}</td>
+  <td class="px-3 py-1.5 text-gray-500">{{ item.processed_at.strftime('%b %d %H:%M') if item.processed_at else '—' }}</td>
+  <td class="px-3 py-1.5 text-red-600 max-w-xs truncate" title="{{ item.error_message or '' }}">
+    {{ item.error_message or '' }}
+  </td>
+  <td class="px-3 py-1.5">
+    {% if item.status in ('pending', 'failed') %}
+    <button hx-post="/admin/sync-queue/{{ item.id }}/push"
+            hx-target="#queue-row-{{ item.id }}"
+            hx-swap="outerHTML"
+            hx-indicator="#push-spinner-{{ item.id }}"
+            class="px-2 py-0.5 bg-gray-900 text-white text-xs font-medium rounded hover:bg-gray-700 transition">
+      Push
+      <span id="push-spinner-{{ item.id }}" class="htmx-indicator ml-1">
+        <svg class="animate-spin h-3 w-3 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      </span>
+    </button>
+    {% endif %}
+  </td>
+</tr>
