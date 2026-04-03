@@ -40,15 +40,15 @@ def test_plan_device_operations_creates_all_action_types() -> None:
         },
     }
     # Dahua device state:
-    #   101 → CardStatus=0 (active), ValidDateEnd="2026-03-31 23:59:59"
+    #   101 → CardStatus=0 (active), ValidDateEnd="20260331 235959"
     #   102 → CardStatus=4 (frozen)
     #   103 → CardStatus=0 (active) — no longer in active member set
     dahua_users = [
         {
             "UserID": "101",
             "CardStatus": "0",
-            "ValidDateStart": "2026-01-01 00:00:00",
-            "ValidDateEnd": "2026-03-31 23:59:59",
+            "ValidDateStart": "20260101 000000",
+            "ValidDateEnd": "20260331 235959",
         },
         {"UserID": "102", "CardStatus": "4", "ValidDateStart": "", "ValidDateEnd": ""},
         {"UserID": "103", "CardStatus": "0", "ValidDateStart": "", "ValidDateEnd": ""},
@@ -80,8 +80,8 @@ def test_plan_device_operations_creates_all_action_types() -> None:
     assert enroll["device_id"] == 7
     assert enroll["mindbody_client_id"] == "104"
     snapshot = json.loads(enroll["member_snapshot"])
-    assert snapshot["valid_start"] == "2026-02-01 00:00:00"
-    assert snapshot["valid_end"] == "2026-11-30 23:59:59"
+    assert snapshot["valid_start"] == "20260201 000000"
+    assert snapshot["valid_end"] == "20261130 235959"
 
     # deactivate: user 103 on device but not in active set
     deactivate = by_action["deactivate"]
@@ -98,7 +98,7 @@ def test_plan_device_operations_creates_all_action_types() -> None:
     assert update["dahua_user_id"] == "101"
     assert update["mindbody_client_id"] == "101"
     window = json.loads(update["member_snapshot"])
-    assert window["valid_end"] == "2026-12-31 23:59:59"
+    assert window["valid_end"] == "20261231 235959"
 
 
 def test_plan_recognises_existing_user_with_normalized_id() -> None:
@@ -117,8 +117,8 @@ def test_plan_recognises_existing_user_with_normalized_id() -> None:
         {
             "UserID": "123",  # device stores normalized form
             "CardStatus": "0",
-            "ValidDateStart": "2026-01-01 00:00:00",
-            "ValidDateEnd": "2026-12-31 23:59:59",
+            "ValidDateStart": "20260101 000000",
+            "ValidDateEnd": "20261231 235959",
         },
     ]
     membership_windows = {
@@ -171,8 +171,8 @@ def test_plan_device_operations_no_op_when_already_in_sync() -> None:
         {
             "UserID": "101",
             "CardStatus": "0",
-            "ValidDateStart": "2026-01-01 00:00:00",
-            "ValidDateEnd": "2026-12-31 23:59:59",
+            "ValidDateStart": "20260101 000000",
+            "ValidDateEnd": "20261231 235959",
         },
     ]
     membership_windows = {
