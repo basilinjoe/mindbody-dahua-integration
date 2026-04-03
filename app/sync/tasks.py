@@ -39,12 +39,12 @@ def _make_card_no(client_id: str) -> str:
 
 
 def _format_dahua_date(iso_str: str | None) -> str | None:
-    """Convert ISO 8601 string (e.g. '2025-12-31T23:59:59Z') to Dahua format ('20251231 235959')."""
+    """Convert ISO 8601 string (e.g. '2025-12-31T23:59:59Z') to Dahua format ('2025-12-31 23:59:59')."""
     if not iso_str:
         return None
     try:
         dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
-        return dt.strftime("%Y%m%d %H%M%S")
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
     except (ValueError, TypeError):
         logger.warning("Malformed date from MindBody API, skipping: %r", iso_str)
         return None

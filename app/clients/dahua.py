@@ -99,9 +99,9 @@ class DahuaClient:
         }
         params.update(self._door_params())
         if valid_start:
-            params["ValidDateStart"] = valid_start
+            params["ValidFrom"] = valid_start
         if valid_end:
-            params["ValidDateEnd"] = valid_end
+            params["ValidTo"] = valid_end
 
         resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
         # Successful insert returns "RecNo=<N>"; update/remove return "OK".
@@ -138,16 +138,16 @@ class DahuaClient:
     async def update_user_validity(
         self, user_id: str, valid_start: str | None, valid_end: str | None
     ) -> bool:
-        """Update ValidDateStart / ValidDateEnd for an existing user (access window)."""
+        """Update ValidFrom / ValidTo for an existing user (access window)."""
         params: dict[str, str] = {
             "action": "update",
             "name": "AccessControlCard",
             "UserID": user_id,
         }
         if valid_start:
-            params["ValidDateStart"] = valid_start
+            params["ValidFrom"] = valid_start
         if valid_end:
-            params["ValidDateEnd"] = valid_end
+            params["ValidTo"] = valid_end
         resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
         ok = resp.status_code == 200 and "OK" in resp.text
         if not ok:

@@ -58,8 +58,8 @@ async def test_add_user_builds_expected_params(monkeypatch: pytest.MonkeyPatch) 
     assert captured["params"]["UserID"] == "100"
     assert captured["params"]["Doors[0]"] == "0"
     assert captured["params"]["Doors[1]"] == "1"
-    assert captured["params"]["ValidDateStart"] == "2026-01-01 00:00:00"
-    assert captured["params"]["ValidDateEnd"] == "2026-12-31 23:59:59"
+    assert captured["params"]["ValidFrom"] == "2026-01-01 00:00:00"
+    assert captured["params"]["ValidTo"] == "2026-12-31 23:59:59"
 
 
 @pytest.mark.asyncio
@@ -131,8 +131,8 @@ async def test_update_user_validity_builds_expected_params(monkeypatch: pytest.M
     assert captured["params"]["action"] == "update"
     assert captured["params"]["name"] == "AccessControlCard"
     assert captured["params"]["UserID"] == "300"
-    assert captured["params"]["ValidDateStart"] == "2026-01-01 00:00:00"
-    assert captured["params"]["ValidDateEnd"] == "2026-12-31 23:59:59"
+    assert captured["params"]["ValidFrom"] == "2026-01-01 00:00:00"
+    assert captured["params"]["ValidTo"] == "2026-12-31 23:59:59"
 
 
 @pytest.mark.asyncio
@@ -155,8 +155,8 @@ async def test_update_user_validity_omits_empty_dates_and_propagates_failure(
 
     assert ok is False
     assert captured["path"] == "/cgi-bin/recordUpdater.cgi"
-    assert "ValidDateStart" not in captured["params"]
-    assert "ValidDateEnd" not in captured["params"]
+    assert "ValidFrom" not in captured["params"]
+    assert "ValidTo" not in captured["params"]
 
 
 @pytest.mark.asyncio

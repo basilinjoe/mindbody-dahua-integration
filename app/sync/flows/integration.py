@@ -373,8 +373,12 @@ def _plan_device_operations(
 
             else:
                 # Active on device — check if access window needs updating
-                current_valid_end = dahua_user.get("ValidDateEnd") or ""
-                current_valid_start = dahua_user.get("ValidDateStart") or ""
+                current_valid_end = (
+                    dahua_user.get("ValidTo") or dahua_user.get("ValidDateEnd") or ""
+                )
+                current_valid_start = (
+                    dahua_user.get("ValidFrom") or dahua_user.get("ValidDateStart") or ""
+                )
                 if (new_valid_end or new_valid_start) and (
                     new_valid_end != current_valid_end or new_valid_start != current_valid_start
                 ):
