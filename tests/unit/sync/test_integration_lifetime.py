@@ -37,7 +37,7 @@ def test_plan_updates_window_for_lifetime_membership() -> None:
     assert len(items) == 1
     assert items[0]["action"] == "update_window"
     window = json.loads(items[0]["member_snapshot"])
-    assert window["valid_start"] == "2026-01-01 00:00:00"
+    assert window["valid_start"] == "20260101 000000"
     assert window["valid_end"] is None
 
 
@@ -74,8 +74,8 @@ def test_plan_updates_when_only_start_changed() -> None:
         {
             "UserID": "400",
             "CardStatus": "0",
-            "ValidDateStart": "2026-01-01 00:00:00",
-            "ValidDateEnd": "2026-12-31 23:59:59",
+            "ValidDateStart": "20260101 000000",
+            "ValidDateEnd": "20261231 235959",
         },
     ]
     # Start date changed, end date same
@@ -94,4 +94,4 @@ def test_plan_updates_when_only_start_changed() -> None:
     assert len(items) == 1
     assert items[0]["action"] == "update_window"
     window = json.loads(items[0]["member_snapshot"])
-    assert window["valid_start"] == "2026-03-01 00:00:00"
+    assert window["valid_start"] == "20260301 000000"

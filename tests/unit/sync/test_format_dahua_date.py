@@ -6,11 +6,11 @@ from app.sync.tasks import _format_dahua_date
 
 
 def test_valid_iso_date_converts() -> None:
-    assert _format_dahua_date("2026-01-15T10:30:00Z") == "2026-01-15 10:30:00"
+    assert _format_dahua_date("2026-01-15T10:30:00Z") == "20260115 103000"
 
 
 def test_valid_iso_with_offset() -> None:
-    assert _format_dahua_date("2026-06-01T00:00:00+00:00") == "2026-06-01 00:00:00"
+    assert _format_dahua_date("2026-06-01T00:00:00+00:00") == "20260601 000000"
 
 
 def test_none_returns_none() -> None:

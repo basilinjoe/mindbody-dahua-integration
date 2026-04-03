@@ -200,8 +200,8 @@ async def test_add_user_without_validity_dates(monkeypatch: pytest.MonkeyPatch) 
         await client.close()
 
     assert ok is True
-    assert "ValidFrom" not in captured["params"]
-    assert "ValidTo" not in captured["params"]
+    assert "ValidDateStart" not in captured["params"]
+    assert "ValidDateEnd" not in captured["params"]
 
 
 @pytest.mark.asyncio
