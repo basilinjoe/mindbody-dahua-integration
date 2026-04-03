@@ -101,6 +101,47 @@ def test_plan_device_operations_creates_all_action_types() -> None:
     assert window["valid_end"] == "2026-12-31 23:59:59"
 
 
+def test_plan_recognises_existing_user_with_normalized_id() -> None:
+    """MindBody ID '00123' should match device UserID '123' (normalized by _make_dahua_user_id)."""
+    active_member_ids = {"00123"}
+    member_map = {
+        "00123": {
+            "Id": "00123",
+            "FirstName": "A",
+            "LastName": "B",
+            "Gender": "male",
+            "Email": None,
+        },
+    }
+    dahua_users = [
+        {
+            "UserID": "123",  # device stores normalized form
+            "CardStatus": "0",
+            "ValidDateStart": "2026-01-01 00:00:00",
+            "ValidDateEnd": "2026-12-31 23:59:59",
+        },
+    ]
+    membership_windows = {
+        "00123": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
+    }
+
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=active_member_ids,
+        member_map=member_map,
+        dahua_users=dahua_users,
+        membership_windows=membership_windows,
+    )
+    # Should NOT try to enroll — the member already exists on the device
+    assert all(i["action"] != "enroll" for i in items), (
+        f"Should not enroll already-present member, got: {items}"
+    )
+    # Should NOT deactivate — the member is active
+    assert all(i["action"] != "deactivate" for i in items), (
+        f"Should not deactivate active member, got: {items}"
+    )
+
+
 def test_plan_device_operations_returns_empty_when_no_active_members() -> None:
     """No active members and empty Dahua device → no operations."""
     items = integration_mod._plan_device_operations(

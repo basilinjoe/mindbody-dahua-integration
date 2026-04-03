@@ -99,7 +99,8 @@ class DahuaClient:
             params["ValidDateEnd"] = valid_end
 
         resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
-        ok = resp.status_code == 200 and "OK" in resp.text
+        # Successful insert returns "RecNo=<N>"; update/remove return "OK".
+        ok = resp.status_code == 200 and ("OK" in resp.text or "RecNo=" in resp.text)
         if not ok:
             logger.error("add_user %s failed on %s: %s", user_id, self.device_name, resp.text)
         return ok

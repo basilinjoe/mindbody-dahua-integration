@@ -63,6 +63,27 @@ async def test_add_user_builds_expected_params(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
+async def test_add_user_succeeds_with_recno_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dahua devices return 'RecNo=<N>' (not 'OK') on successful insert."""
+    client = DahuaClient("127.0.0.1", door_ids="0")
+
+    async def fake_get(path: str, params=None):  # noqa: ANN001, ANN202
+        return DummyResponse(200, "RecNo=349")
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    try:
+        ok = await client.add_user(
+            user_id="29963401172",
+            card_name="Test Member",
+            card_no="MB29963401",
+        )
+    finally:
+        await client.close()
+
+    assert ok is True
+
+
+@pytest.mark.asyncio
 async def test_update_and_remove_user_status_semantics(monkeypatch: pytest.MonkeyPatch) -> None:
     client = DahuaClient("127.0.0.1")
     calls: list[dict] = []

@@ -14,6 +14,7 @@ from app.models.database import ensure_timestamps_tz
 from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
     _format_dahua_date,
+    _make_dahua_user_id,
     archive_previous_sync_queue,
     fetch_all_memberships,
     fetch_dahua_users_for_device,
@@ -326,7 +327,10 @@ def _plan_device_operations(
         new_valid_start = _format_dahua_date(start_date)
         new_valid_end = _format_dahua_date(expiration_date)
 
-        if cid not in dahua_map:
+        # Normalize to match the UserID stored on the device during enrollment
+        device_uid = _make_dahua_user_id(cid)
+
+        if device_uid not in dahua_map:
             # Not on device yet → enroll
             m = member_map.get(cid, {})
             items.append(
@@ -351,7 +355,7 @@ def _plan_device_operations(
             )
 
         else:
-            dahua_user = dahua_map[cid]
+            dahua_user = dahua_map[device_uid]
             card_status = str(dahua_user.get("CardStatus", "0"))
 
             if card_status == "4":
@@ -362,7 +366,7 @@ def _plan_device_operations(
                         "mindbody_client_id": cid,
                         "action": "reactivate",
                         "member_snapshot": None,
-                        "dahua_user_id": cid,
+                        "dahua_user_id": device_uid,
                         "enrollment_id": None,
                     }
                 )
@@ -385,14 +389,16 @@ def _plan_device_operations(
                                     "valid_end": new_valid_end,
                                 }
                             ),
-                            "dahua_user_id": cid,
+                            "dahua_user_id": device_uid,
                             "enrollment_id": None,
                         }
                     )
 
     # ── Users on device not in active set → deactivate ────────────────────────
+    # Build normalized set of active IDs for consistent comparison with device UserIDs
+    active_device_uids = {_make_dahua_user_id(cid) for cid in active_member_ids}
     for user_id, dahua_user in dahua_map.items():
-        if user_id in active_member_ids:
+        if user_id in active_device_uids:
             continue  # handled above
         card_status = str(dahua_user.get("CardStatus", "0"))
         if card_status != "4":  # only act if not already frozen
