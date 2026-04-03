@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from urllib.parse import quote, urlencode
 
 import httpx
 
@@ -46,7 +47,11 @@ class DahuaClient:
 
     async def _get(self, path: str, params: dict | None = None) -> httpx.Response:
         async with self._semaphore:
-            resp = await self._http.get(f"{self._base}{path}", params=params or {})
+            # Build query string with %20 for spaces (not +) — Dahua stores
+            # '+' literally in fields like CardName.
+            qs = urlencode(params or {}, quote_via=quote)
+            url = f"{self._base}{path}?{qs}" if qs else f"{self._base}{path}"
+            resp = await self._http.get(url)
             return resp
 
     async def _post_json(self, path: str, json_body: dict) -> httpx.Response:
