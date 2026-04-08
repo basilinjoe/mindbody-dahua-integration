@@ -16,6 +16,7 @@ def test_plan_updates_window_for_lifetime_membership() -> None:
     dahua_users = [
         {
             "UserID": "200",
+            "CardName": "A B",
             "CardStatus": "0",
             "ValidDateStart": "",
             "ValidDateEnd": "",
@@ -35,7 +36,7 @@ def test_plan_updates_window_for_lifetime_membership() -> None:
     )
 
     assert len(items) == 1
-    assert items[0]["action"] == "update_window"
+    assert items[0]["action"] == "update"
     window = json.loads(items[0]["member_snapshot"])
     assert window["valid_start"] == "20260101 000000"
     assert window["valid_end"] is None
@@ -48,7 +49,13 @@ def test_plan_no_op_for_lifetime_no_dates() -> None:
         "300": {"Id": "300", "FirstName": "C", "LastName": "D", "Gender": "female", "Email": None},
     }
     dahua_users = [
-        {"UserID": "300", "CardStatus": "0", "ValidDateStart": "", "ValidDateEnd": ""},
+        {
+            "UserID": "300",
+            "CardName": "C D",
+            "CardStatus": "0",
+            "ValidDateStart": "",
+            "ValidDateEnd": "",
+        },
     ]
     membership_windows = {
         "300": {"valid_start": None, "valid_end": None},
@@ -74,6 +81,7 @@ def test_plan_updates_when_only_start_changed() -> None:
         {
             "UserID": "400",
             "CardStatus": "0",
+            "CardName": "E F",
             "ValidDateStart": "20260101 000000",
             "ValidDateEnd": "20261231 235959",
         },
@@ -92,6 +100,6 @@ def test_plan_updates_when_only_start_changed() -> None:
     )
 
     assert len(items) == 1
-    assert items[0]["action"] == "update_window"
+    assert items[0]["action"] == "update"
     window = json.loads(items[0]["member_snapshot"])
     assert window["valid_start"] == "20260301 000000"

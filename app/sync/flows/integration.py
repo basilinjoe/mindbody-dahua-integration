@@ -38,7 +38,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     2. Query local DB for active members with active memberships, classified by gender
     3. Fetch live user records from each Dahua device and compare against active members
        (UserID on Dahua device == mindbody_id)
-    4. Compute enroll / deactivate / reactivate / update_window operations
+    4. Compute enroll / deactivate / reactivate / update operations
     5. Write operations to dahua_sync_queue and execute against devices
     """
     flow_logger = get_run_logger()
@@ -231,16 +231,16 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
             )
             c = Counter(i["action"] for i in items)
             flow_logger.info(
-                "Device %d (%s): enroll=%d deactivate=%d reactivate=%d update_window=%d",
+                "Device %d (%s): enroll=%d deactivate=%d reactivate=%d update=%d",
                 device_id,
                 gate_label,
                 c["enroll"],
                 c["deactivate"],
                 c["reactivate"],
-                c["update_window"],
+                c["update"],
             )
             # Log individual member IDs per action for debugging
-            for action in ("enroll", "deactivate", "reactivate", "update_window"):
+            for action in ("enroll", "deactivate", "reactivate", "update"):
                 action_ids = [i["mindbody_client_id"] for i in items if i["action"] == action]
                 if action_ids:
                     flow_logger.info(
@@ -256,12 +256,12 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
 
     total = Counter(i["action"] for i in all_items)
     flow_logger.info(
-        "Total planned: %d operations — enroll=%d deactivate=%d reactivate=%d update_window=%d",
+        "Total planned: %d operations — enroll=%d deactivate=%d reactivate=%d update=%d",
         len(all_items),
         total["enroll"],
         total["deactivate"],
         total["reactivate"],
-        total["update_window"],
+        total["update"],
     )
 
     if not all_items:
@@ -311,7 +311,7 @@ def _plan_device_operations(
     Compare active MindBody members against live Dahua device records.
     UserID on the Dahua device is expected to equal the MindBody client ID.
 
-    Returns a list of queue item dicts (action ∈ enroll|deactivate|reactivate|update_window).
+    Returns a list of queue item dicts (action ∈ enroll|deactivate|reactivate|update).
     Does NOT execute any device operations.
     """
     # Build a map of UserID → Dahua user record for O(1) lookups
@@ -319,7 +319,7 @@ def _plan_device_operations(
 
     items: list[dict] = []
 
-    # ── Active members: enroll / reactivate / update_window ───────────────────
+    # ── Active members: enroll / reactivate / update ───────────────────
     for cid in active_member_ids:
         window = membership_windows.get(cid, {})
         start_date = window.get("valid_start")
@@ -372,21 +372,31 @@ def _plan_device_operations(
                 )
 
             else:
-                # Active on device — check if access window needs updating
+                # Active on device — check if name or access window needs updating
+                m = member_map.get(cid, {})
+                first_name = m.get("FirstName", "")
+                last_name = m.get("LastName", "")
+                new_card_name = f"{first_name} {last_name}".strip()
+                current_card_name = dahua_user.get("CardName") or ""
                 current_valid_end = dahua_user.get("ValidDateEnd") or ""
                 current_valid_start = dahua_user.get("ValidDateStart") or ""
-                if (new_valid_end or new_valid_start) and (
+
+                name_changed = new_card_name and new_card_name != current_card_name
+                window_changed = (new_valid_end or new_valid_start) and (
                     new_valid_end != current_valid_end or new_valid_start != current_valid_start
-                ):
+                )
+
+                if name_changed or window_changed:
                     items.append(
                         {
                             "device_id": device_id,
                             "mindbody_client_id": cid,
-                            "action": "update_window",
+                            "action": "update",
                             "member_snapshot": json.dumps(
                                 {
-                                    "valid_start": new_valid_start,
-                                    "valid_end": new_valid_end,
+                                    "card_name": new_card_name if name_changed else None,
+                                    "valid_start": new_valid_start if window_changed else None,
+                                    "valid_end": new_valid_end if window_changed else None,
                                 }
                             ),
                             "dahua_user_id": device_uid,

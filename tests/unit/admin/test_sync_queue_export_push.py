@@ -152,18 +152,20 @@ async def test_execute_push_enroll_success():
 
 
 @pytest.mark.asyncio
-async def test_execute_push_update_window_success():
-    snapshot = json.dumps({"valid_start": "2025-01-01", "valid_end": "2025-12-31"})
+async def test_execute_push_update_success():
+    snapshot = json.dumps(
+        {"card_name": "Jane Doe", "valid_start": "2025-01-01", "valid_end": "2025-12-31"}
+    )
     item = MagicMock(spec=DahuaSyncQueue)
     item.device_id = 1
-    item.action = "update_window"
+    item.action = "update"
     item.dahua_user_id = "789"
     item.member_snapshot = snapshot
     db = AsyncMock()
 
     device = MagicMock(host="h", port=80, username="u", password="p", door_ids="0")
     mock_client = AsyncMock()
-    mock_client.update_user_validity = AsyncMock(return_value=True)
+    mock_client.update_user = AsyncMock(return_value=True)
 
     with (
         patch("app.admin.sync_queue.devices_svc") as mock_svc,
@@ -173,7 +175,9 @@ async def test_execute_push_update_window_success():
         success, err = await _execute_push(item, db)
 
     assert success is True
-    mock_client.update_user_validity.assert_called_once_with("789", "2025-01-01", "2025-12-31")
+    mock_client.update_user.assert_called_once_with(
+        "789", card_name="Jane Doe", valid_start="2025-01-01", valid_end="2025-12-31"
+    )
 
 
 @pytest.mark.asyncio

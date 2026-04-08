@@ -107,7 +107,7 @@ async def test_update_and_remove_user_status_semantics(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_update_user_validity_builds_expected_params(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_update_user_builds_expected_params(monkeypatch: pytest.MonkeyPatch) -> None:
     client = DahuaClient("127.0.0.1")
     captured: dict = {}
 
@@ -118,8 +118,9 @@ async def test_update_user_validity_builds_expected_params(monkeypatch: pytest.M
 
     monkeypatch.setattr(client, "_get", fake_get)
     try:
-        ok = await client.update_user_validity(
+        ok = await client.update_user(
             user_id="300",
+            card_name="Jane Doe",
             valid_start="2026-01-01 00:00:00",
             valid_end="2026-12-31 23:59:59",
         )
@@ -131,12 +132,13 @@ async def test_update_user_validity_builds_expected_params(monkeypatch: pytest.M
     assert captured["params"]["action"] == "update"
     assert captured["params"]["name"] == "AccessControlCard"
     assert captured["params"]["UserID"] == "300"
+    assert captured["params"]["CardName"] == "Jane Doe"
     assert captured["params"]["ValidDateStart"] == "2026-01-01 00:00:00"
     assert captured["params"]["ValidDateEnd"] == "2026-12-31 23:59:59"
 
 
 @pytest.mark.asyncio
-async def test_update_user_validity_omits_empty_dates_and_propagates_failure(
+async def test_update_user_omits_empty_fields_and_propagates_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = DahuaClient("127.0.0.1")
@@ -149,12 +151,13 @@ async def test_update_user_validity_omits_empty_dates_and_propagates_failure(
 
     monkeypatch.setattr(client, "_get", fake_get)
     try:
-        ok = await client.update_user_validity(user_id="301", valid_start=None, valid_end=None)
+        ok = await client.update_user(user_id="301")
     finally:
         await client.close()
 
     assert ok is False
     assert captured["path"] == "/cgi-bin/recordUpdater.cgi"
+    assert "CardName" not in captured["params"]
     assert "ValidDateStart" not in captured["params"]
     assert "ValidDateEnd" not in captured["params"]
 

@@ -15,7 +15,7 @@ from app.sync.tasks import (
     load_pending_queue_items,
     mark_queue_item,
     reactivate_on_device,
-    update_window_on_device,
+    update_on_device,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,21 +52,21 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
             "enrolled": 0,
             "deactivated": 0,
             "reactivated": 0,
-            "window_updated": 0,
+            "updated": 0,
             "failed": 0,
             "skipped": len(items),
         }
 
     if not items:
         flow_logger.info("No pending items — nothing to push")
-        return {"enrolled": 0, "deactivated": 0, "reactivated": 0, "window_updated": 0, "failed": 0}
+        return {"enrolled": 0, "deactivated": 0, "reactivated": 0, "updated": 0, "failed": 0}
 
-    stats = {"enrolled": 0, "deactivated": 0, "reactivated": 0, "window_updated": 0, "failed": 0}
+    stats = {"enrolled": 0, "deactivated": 0, "reactivated": 0, "updated": 0, "failed": 0}
     _stat_key = {
         "enroll": "enrolled",
         "deactivate": "deactivated",
         "reactivate": "reactivated",
-        "update_window": "window_updated",
+        "update": "updated",
     }
 
     async def _execute(item):
@@ -105,20 +105,22 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
                     item.device_id,
                 )
                 success = await reactivate_on_device(item.device_id, item.dahua_user_id)
-            elif item.action == "update_window":
-                window = json.loads(item.member_snapshot or "{}")
+            elif item.action == "update":
+                snapshot = json.loads(item.member_snapshot or "{}")
                 logger.info(
-                    "  Updating window for user=%s on device=%d: %s→%s",
+                    "  Updating user=%s on device=%d: name=%s, window=%s→%s",
                     item.dahua_user_id,
                     item.device_id,
-                    window.get("valid_start"),
-                    window.get("valid_end"),
+                    snapshot.get("card_name"),
+                    snapshot.get("valid_start"),
+                    snapshot.get("valid_end"),
                 )
-                success = await update_window_on_device(
+                success = await update_on_device(
                     item.device_id,
                     item.dahua_user_id,
-                    window.get("valid_start"),
-                    window.get("valid_end"),
+                    card_name=snapshot.get("card_name"),
+                    valid_start=snapshot.get("valid_start"),
+                    valid_end=snapshot.get("valid_end"),
                 )
             else:
                 raise ValueError(f"Unknown action: {item.action!r}")
@@ -158,11 +160,11 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
                 stats["failed"] += 1
 
     flow_logger.info(
-        "Dahua push complete — enrolled=%d deactivated=%d reactivated=%d window_updated=%d failed=%d",
+        "Dahua push complete — enrolled=%d deactivated=%d reactivated=%d updated=%d failed=%d",
         stats["enrolled"],
         stats["deactivated"],
         stats["reactivated"],
-        stats["window_updated"],
+        stats["updated"],
         stats["failed"],
     )
 

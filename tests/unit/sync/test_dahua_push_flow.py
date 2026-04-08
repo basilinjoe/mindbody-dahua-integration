@@ -14,7 +14,7 @@ class _DummyLogger:
 
 
 @pytest.mark.asyncio
-async def test_sync_dahua_push_flow_handles_update_window_and_failures(
+async def test_sync_dahua_push_flow_handles_update_and_failures(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     items = [
@@ -29,10 +29,14 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         ),
         SimpleNamespace(
             id=2,
-            action="update_window",
+            action="update",
             device_id=10,
             member_snapshot=json.dumps(
-                {"valid_start": "2026-01-01 00:00:00", "valid_end": "2026-12-31 23:59:59"}
+                {
+                    "card_name": "Alex One",
+                    "valid_start": "2026-01-01 00:00:00",
+                    "valid_end": "2026-12-31 23:59:59",
+                }
             ),
             dahua_user_id="101",
             enrollment_id=55,
@@ -58,7 +62,7 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         ),
     ]
     marks: list[tuple[int, str, str | None]] = []
-    called_update_window: dict[str, str | int | None] = {}
+    called_update: dict[str, str | int | None] = {}
 
     async def fake_load_pending_queue_items(run_id: str):  # noqa: ANN202
         assert run_id == "run-1"
@@ -77,16 +81,18 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
     async def fake_reactivate_on_device(*_args, **_kwargs):  # noqa: ANN002, ANN003, ANN202
         raise AssertionError("reactivate should not be called")
 
-    async def fake_update_window_on_device(  # noqa: ANN202
+    async def fake_update_on_device(  # noqa: ANN202
         device_id: int,
         dahua_user_id: str,
-        valid_start: str | None,
-        valid_end: str | None,
+        card_name: str | None = None,
+        valid_start: str | None = None,
+        valid_end: str | None = None,
     ):
-        called_update_window.update(
+        called_update.update(
             {
                 "device_id": device_id,
                 "dahua_user_id": dahua_user_id,
+                "card_name": card_name,
                 "valid_start": valid_start,
                 "valid_end": valid_end,
             }
@@ -112,7 +118,7 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
     monkeypatch.setattr(dahua_push_mod, "enroll_on_device", fake_enroll_on_device)
     monkeypatch.setattr(dahua_push_mod, "deactivate_on_device", fake_deactivate_on_device)
     monkeypatch.setattr(dahua_push_mod, "reactivate_on_device", fake_reactivate_on_device)
-    monkeypatch.setattr(dahua_push_mod, "update_window_on_device", fake_update_window_on_device)
+    monkeypatch.setattr(dahua_push_mod, "update_on_device", fake_update_on_device)
     monkeypatch.setattr(dahua_push_mod, "mark_queue_item", fake_mark_queue_item)
     monkeypatch.setattr(dahua_push_mod, "create_table_artifact", fake_create_table_artifact)
 
@@ -122,12 +128,13 @@ async def test_sync_dahua_push_flow_handles_update_window_and_failures(
         "enrolled": 1,
         "deactivated": 0,
         "reactivated": 0,
-        "window_updated": 1,
+        "updated": 1,
         "failed": 2,
     }
-    assert called_update_window == {
+    assert called_update == {
         "device_id": 10,
         "dahua_user_id": "101",
+        "card_name": "Alex One",
         "valid_start": "2026-01-01 00:00:00",
         "valid_end": "2026-12-31 23:59:59",
     }

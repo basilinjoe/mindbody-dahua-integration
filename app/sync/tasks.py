@@ -351,13 +351,19 @@ async def fetch_dahua_users_for_device(device_id: int) -> list[dict]:
         await client.close()
 
 
-@task(name="update-window-on-device", retries=2, retry_delay_seconds=5, tags=["dahua"])
-async def update_window_on_device(
+@task(name="update-on-device", retries=2, retry_delay_seconds=5, tags=["dahua"])
+async def update_on_device(
     device_id: int,
     dahua_user_id: str,
-    valid_start: str | None,
-    valid_end: str | None,
+    card_name: str | None = None,
+    valid_start: str | None = None,
+    valid_end: str | None = None,
 ) -> bool:
-    """Update ValidDateStart/ValidDateEnd for an existing user on a Dahua device."""
+    """Update CardName and/or validity dates for an existing user on a Dahua device."""
     async with _dahua_device(device_id) as client:
-        return await client.update_user_validity(dahua_user_id, valid_start, valid_end)
+        return await client.update_user(
+            dahua_user_id,
+            card_name=card_name,
+            valid_start=valid_start,
+            valid_end=valid_end,
+        )

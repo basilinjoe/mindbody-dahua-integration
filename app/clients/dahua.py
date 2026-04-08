@@ -135,15 +135,21 @@ class DahuaClient:
         return ok
 
     @dahua_retry
-    async def update_user_validity(
-        self, user_id: str, valid_start: str | None, valid_end: str | None
+    async def update_user(
+        self,
+        user_id: str,
+        card_name: str | None = None,
+        valid_start: str | None = None,
+        valid_end: str | None = None,
     ) -> bool:
-        """Update ValidDateStart / ValidDateEnd for an existing user (access window)."""
+        """Update CardName and/or validity dates for an existing user."""
         params: dict[str, str] = {
             "action": "update",
             "name": "AccessControlCard",
             "UserID": user_id,
         }
+        if card_name:
+            params["CardName"] = card_name
         if valid_start:
             params["ValidDateStart"] = valid_start
         if valid_end:
@@ -151,9 +157,7 @@ class DahuaClient:
         resp = await self._get("/cgi-bin/recordUpdater.cgi", params)
         ok = resp.status_code == 200 and "OK" in resp.text
         if not ok:
-            logger.error(
-                "update_user_validity %s failed on %s: %s", user_id, self.device_name, resp.text
-            )
+            logger.error("update_user %s failed on %s: %s", user_id, self.device_name, resp.text)
         return ok
 
     @dahua_retry

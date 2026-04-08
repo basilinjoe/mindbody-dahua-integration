@@ -220,12 +220,13 @@ async def _execute_push(item: DahuaSyncQueue, db: AsyncSession) -> tuple[bool, s
             success = await client.update_user_status(item.dahua_user_id, card_status=4)
         elif item.action == "reactivate":
             success = await client.update_user_status(item.dahua_user_id, card_status=0)
-        elif item.action == "update_window":
-            window = json.loads(item.member_snapshot or "{}")
-            success = await client.update_user_validity(
+        elif item.action == "update":
+            snapshot = json.loads(item.member_snapshot or "{}")
+            success = await client.update_user(
                 item.dahua_user_id,
-                window.get("valid_start"),
-                window.get("valid_end"),
+                card_name=snapshot.get("card_name"),
+                valid_start=snapshot.get("valid_start"),
+                valid_end=snapshot.get("valid_end"),
             )
         else:
             return False, f"Unknown action: {item.action!r}"
