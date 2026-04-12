@@ -54,6 +54,7 @@ def _row_to_dict(queue_item: DahuaSyncQueue, client, device) -> dict:
     return {
         "id": queue_item.id,
         "run_id": queue_item.run_id,
+        "flow_type": queue_item.flow_type,
         "mindbody_client_id": queue_item.mindbody_client_id,
         "client_name": client.full_name if client else "—",
         "device_id": queue_item.device_id,

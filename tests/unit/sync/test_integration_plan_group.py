@@ -71,13 +71,15 @@ def test_plan_device_operations_creates_all_action_types() -> None:
         membership_windows=membership_windows,
     )
 
-    by_action = {item["action"]: item for item in items}
+    by_action: dict[str, list[dict]] = {}
+    for item in items:
+        by_action.setdefault(item["action"], []).append(item)
     assert set(by_action.keys()) == {"enroll", "deactivate", "reactivate", "update"}, (
         f"Expected all 4 action types, got: {set(by_action.keys())}"
     )
 
     # enroll: member 104 not on device
-    enroll = by_action["enroll"]
+    enroll = by_action["enroll"][0]
     assert enroll["device_id"] == 7
     assert enroll["mindbody_client_id"] == "104"
     snapshot = json.loads(enroll["member_snapshot"])
@@ -85,20 +87,23 @@ def test_plan_device_operations_creates_all_action_types() -> None:
     assert snapshot["valid_end"] == "20261130 235959"
 
     # deactivate: user 103 on device but not in active set
-    deactivate = by_action["deactivate"]
+    deactivate = by_action["deactivate"][0]
     assert deactivate["dahua_user_id"] == "103"
     assert deactivate["mindbody_client_id"] == "103"
 
     # reactivate: member 102 frozen on device but has active membership
-    reactivate = by_action["reactivate"]
+    reactivate = by_action["reactivate"][0]
     assert reactivate["dahua_user_id"] == "102"
     assert reactivate["mindbody_client_id"] == "102"
 
-    # update: member 101 active but expiry changed (was 2026-03-31, now 2026-12-31)
-    update = by_action["update"]
-    assert update["dahua_user_id"] == "101"
-    assert update["mindbody_client_id"] == "101"
-    snapshot = json.loads(update["member_snapshot"])
+    # update: member 101 window changed + member 102 window updated after reactivation
+    update_ids = {u["mindbody_client_id"] for u in by_action["update"]}
+    assert "101" in update_ids, "Member 101 should get a window update"
+    assert "102" in update_ids, "Member 102 should get a window update after reactivation"
+
+    # Verify member 101's window update snapshot
+    update_101 = [u for u in by_action["update"] if u["mindbody_client_id"] == "101"][0]
+    snapshot = json.loads(update_101["member_snapshot"])
     assert snapshot["card_name"] is None  # name unchanged
     assert snapshot["valid_end"] == "20261231 235959"
 

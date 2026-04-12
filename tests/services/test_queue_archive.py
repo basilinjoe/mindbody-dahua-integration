@@ -15,6 +15,7 @@ def _make_queue_item(**overrides) -> MagicMock:
     defaults = {
         "id": 1,
         "run_id": "old-run",
+        "flow_type": "full",
         "device_id": 1,
         "mindbody_client_id": "101",
         "action": "enroll",
@@ -199,4 +200,4 @@ async def test_archive_previous_sync_queue_task_delegates():
         ) as mock_archive:
             result = await tasks_mod.archive_previous_sync_queue.fn("run-1")
             assert result == 5
-            mock_archive.assert_called_once_with(mock_db, "run-1")
+            mock_archive.assert_called_once_with(mock_db, "run-1", flow_type=None)

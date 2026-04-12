@@ -18,9 +18,16 @@ def _to_str(value: object) -> str | None:
     return str(value)
 
 
-async def upsert_batch(db: AsyncSession, members: list[dict]) -> int:
-    """Upsert a batch of raw MindBody member dicts. Returns number of rows written."""
-    now = datetime.now(UTC)
+async def upsert_batch(
+    db: AsyncSession, members: list[dict], fetched_at: datetime | None = None
+) -> int:
+    """Upsert a batch of raw MindBody member dicts. Returns number of rows written.
+
+    fetched_at controls the last_fetched_at timestamp written to each row.
+    Defaults to now(UTC) when not provided. The incremental flow passes an
+    earlier timestamp so the watermark only advances after a successful push.
+    """
+    now = fetched_at or datetime.now(UTC)
     seen: set[str] = set()
     rows = []
     for m in members:
@@ -86,7 +93,50 @@ async def load_active(db: AsyncSession) -> list[MindBodyClient]:
     return list(result.scalars().all())
 
 
+async def load_active_by_ids(db: AsyncSession, client_ids: list[str]) -> list[MindBodyClient]:
+    """Return MindBodyClient rows for the given IDs that are active with an active membership."""
+    if not client_ids:
+        return []
+    result = await db.execute(
+        select(MindBodyClient)
+        .join(
+            MindBodyMembership,
+            MindBodyClient.mindbody_id == MindBodyMembership.mindbody_client_id,
+        )
+        .where(
+            MindBodyClient.mindbody_id.in_(client_ids),
+            MindBodyClient.active.is_(True),
+            MindBodyMembership.is_active.is_(True),
+            or_(
+                MindBodyMembership.expiration_date.is_(None),
+                cast(MindBodyMembership.expiration_date, DateTime(timezone=True))
+                > datetime.now(UTC),
+            ),
+        )
+        .distinct()
+    )
+    return list(result.scalars().all())
+
+
 async def get_last_fetched_at(db: AsyncSession) -> datetime | None:
     """Return the most recent last_fetched_at timestamp across all member rows."""
     result = await db.execute(select(func.max(MindBodyClient.last_fetched_at)))
     return result.scalar_one_or_none()
+
+
+async def update_last_fetched_at(
+    db: AsyncSession, client_ids: list[str], timestamp: datetime
+) -> int:
+    """Set last_fetched_at for the given client IDs. Returns number of rows updated."""
+    if not client_ids:
+        return 0
+    from sqlalchemy import update
+
+    stmt = (
+        update(MindBodyClient)
+        .where(MindBodyClient.mindbody_id.in_(client_ids))
+        .values(last_fetched_at=timestamp)
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount  # type: ignore[return-value]

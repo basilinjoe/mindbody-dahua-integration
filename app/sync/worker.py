@@ -29,6 +29,7 @@ from app.models.device import DahuaDevice
 from app.sync.blocks import MindBodyCredentials
 from app.sync.flows.dahua_push import sync_dahua_push_flow
 from app.sync.flows.health import device_health_flow
+from app.sync.flows.incremental import sync_incremental_flow
 from app.sync.flows.integration import sync_integration_flow
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ async def _sync_variables_from_env() -> None:
     """Set Prefect Variables from env vars when provided, otherwise leave existing values."""
     mapping = {
         "SYNC_INTERVAL_MINUTES": "sync_interval_minutes",
+        "INCREMENTAL_INTERVAL_MINUTES": "incremental_interval_minutes",
         "HEALTH_INTERVAL_MINUTES": "health_interval_minutes",
         "DAHUA_PUSH_ENABLED": "dahua_push_enabled",
     }
@@ -130,23 +132,36 @@ async def _setup() -> tuple[int, int]:
         logger.info("Prefect variable 'dahua_push_enabled' initialised to 'false'")
 
     # Read schedule intervals from Prefect Variables
-    interval = int(await Variable.get("sync_interval_minutes", default="30"))
+    interval = int(await Variable.get("sync_interval_minutes", default="1440"))
+    incremental_interval = int(await Variable.get("incremental_interval_minutes", default="5"))
     health_interval = int(await Variable.get("health_interval_minutes", default="5"))
-    logger.info("Sync interval: %d min | Health interval: %d min", interval, health_interval)
+    logger.info(
+        "Full sync interval: %d min | Incremental interval: %d min | Health interval: %d min",
+        interval,
+        incremental_interval,
+        health_interval,
+    )
 
-    return interval, health_interval
+    return interval, incremental_interval, health_interval
 
 
 async def main() -> None:
-    interval, health_interval = await _setup()
+    interval, incremental_interval, health_interval = await _setup()
 
     await aserve(
-        # Full sync — every N minutes
+        # Full reconciliation — daily (handles deactivation + full state comparison)
         await sync_integration_flow.ato_deployment(
             name="full",
             interval=timedelta(minutes=interval),
             parameters={"sync_type": "scheduled"},
             tags=["integration", "full"],
+        ),
+        # Incremental sync — every 5 min (enroll/reactivate/update only, no deactivation)
+        await sync_incremental_flow.ato_deployment(
+            name="incremental",
+            interval=timedelta(minutes=incremental_interval),
+            parameters={"sync_type": "scheduled"},
+            tags=["integration", "incremental"],
         ),
         # Scheduled health check
         await device_health_flow.ato_deployment(

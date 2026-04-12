@@ -250,11 +250,13 @@ async def fetch_all_memberships(client_ids: list[str]) -> dict[str, list[dict]]:
 
 
 @task(name="upsert-mindbody-users-batch", tags=["db"])
-async def upsert_mindbody_users_batch(members: list[dict]) -> int:
+async def upsert_mindbody_users_batch(
+    members: list[dict], fetched_at: datetime | None = None
+) -> int:
     """Upsert MindBody user details into the mindbody_clients table. Returns rows written."""
     logger.info("upsert_mindbody_users_batch: upserting %d members", len(members))
     async with _get_async_session_factory()() as db:
-        count = await members_svc.upsert_batch(db, members)
+        count = await members_svc.upsert_batch(db, members, fetched_at=fetched_at)
     logger.info("upsert_mindbody_users_batch: wrote %d rows", count)
     return count
 
@@ -278,20 +280,25 @@ async def upsert_mindbody_memberships_batch(memberships_by_client: dict[str, lis
 
 
 @task(name="archive-previous-sync-queue", tags=["db"])
-async def archive_previous_sync_queue(current_run_id: str) -> int:
-    """Archive queue items from previous runs to JSON files, then delete from DB."""
+async def archive_previous_sync_queue(current_run_id: str, flow_type: str | None = None) -> int:
+    """Archive queue items from previous runs to JSON files, then delete from DB.
+
+    When flow_type is provided, only archive rows matching that flow_type.
+    """
     async with _get_async_session_factory()() as db:
-        return await queue_archive_svc.archive_previous_runs(db, current_run_id)
+        return await queue_archive_svc.archive_previous_runs(
+            db, current_run_id, flow_type=flow_type
+        )
 
 
 # ── Dahua sync queue tasks ───────────────────────────────────────────────────────
 
 
 @task(name="write-sync-queue-batch", tags=["db"])
-async def write_sync_queue_batch(run_id: str, items: list[dict]) -> int:
+async def write_sync_queue_batch(run_id: str, items: list[dict], flow_type: str = "full") -> int:
     """Insert a batch of planned Dahua operations into dahua_sync_queue. Returns rows inserted."""
     async with _get_async_session_factory()() as db:
-        return await queue_svc.write_batch(db, run_id, items)
+        return await queue_svc.write_batch(db, run_id, items, flow_type=flow_type)
 
 
 @task(name="load-pending-queue-items", tags=["db"])
@@ -323,6 +330,27 @@ async def load_active_members_from_db() -> list[MindBodyClientModel]:
     """Return all MindBody clients that are active and have an active membership."""
     async with _get_async_session_factory()() as db:
         return await members_svc.load_active(db)
+
+
+@task(name="load-last-fetched-at", tags=["db"])
+async def load_last_fetched_at() -> datetime | None:
+    """Return the most recent last_fetched_at timestamp across all member rows."""
+    async with _get_async_session_factory()() as db:
+        return await members_svc.get_last_fetched_at(db)
+
+
+@task(name="advance-watermark", tags=["db"])
+async def advance_watermark(client_ids: list[str], timestamp: datetime) -> int:
+    """Advance last_fetched_at for the given members after a successful push."""
+    async with _get_async_session_factory()() as db:
+        return await members_svc.update_last_fetched_at(db, client_ids, timestamp)
+
+
+@task(name="load-active-members-by-ids", tags=["db"])
+async def load_active_members_by_ids(client_ids: list[str]) -> list[MindBodyClientModel]:
+    """Return MindBody clients matching given IDs that are active with active membership."""
+    async with _get_async_session_factory()() as db:
+        return await members_svc.load_active_by_ids(db, client_ids)
 
 
 @task(name="fetch-dahua-users-for-device", retries=2, retry_delay_seconds=15, tags=["dahua"])

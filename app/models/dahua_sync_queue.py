@@ -17,7 +17,10 @@ class DahuaSyncQueue(Base):
     mindbody_client_id: Mapped[str] = mapped_column(String(64), nullable=False)
     action: Mapped[str] = mapped_column(
         String(16), nullable=False
-    )  # enroll | deactivate | reactivate
+    )  # enroll | deactivate | reactivate | update
+    flow_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="full"
+    )  # full | incremental
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="pending"
     )  # pending | success | failed

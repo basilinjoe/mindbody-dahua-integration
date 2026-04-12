@@ -8,11 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.dahua_sync_queue import DahuaSyncQueue
 
 
-async def write_batch(db: AsyncSession, run_id: str, items: list[dict]) -> int:
+async def write_batch(
+    db: AsyncSession, run_id: str, items: list[dict], flow_type: str = "full"
+) -> int:
     """Insert a batch of queue items for the given run_id. Returns number of rows inserted."""
     if not items:
         return 0
-    rows = [DahuaSyncQueue(run_id=run_id, **item) for item in items]
+    rows = [DahuaSyncQueue(run_id=run_id, flow_type=flow_type, **item) for item in items]
     db.add_all(rows)
     await db.commit()
     return len(rows)

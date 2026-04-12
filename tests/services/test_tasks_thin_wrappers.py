@@ -40,7 +40,7 @@ async def test_upsert_mindbody_users_batch_delegates_to_members_service():
         ) as mock_upsert:
             result = await tasks_mod.upsert_mindbody_users_batch.fn(members_data)
             assert result == 1
-            mock_upsert.assert_called_once_with(mock_db, members_data)
+            mock_upsert.assert_called_once_with(mock_db, members_data, fetched_at=None)
 
 
 @pytest.mark.asyncio
@@ -158,7 +158,7 @@ async def test_write_sync_queue_batch_delegates_to_queue_service():
         ) as mock_wb:
             result = await tasks_mod.write_sync_queue_batch.fn("run-1", items)
             assert result == 1
-            mock_wb.assert_called_once_with(mock_db, "run-1", items)
+            mock_wb.assert_called_once_with(mock_db, "run-1", items, flow_type="full")
 
 
 @pytest.mark.asyncio

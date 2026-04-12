@@ -34,3 +34,4 @@ htmlcov/
 .env.*
 !.env.example
 sdk/
+graphify-out/

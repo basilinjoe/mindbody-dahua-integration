@@ -20,6 +20,7 @@ def _serialize_queue_item(item: DahuaSyncQueue) -> dict:
     return {
         "id": item.id,
         "run_id": item.run_id,
+        "flow_type": item.flow_type,
         "device_id": item.device_id,
         "mindbody_client_id": item.mindbody_client_id,
         "action": item.action,
@@ -33,16 +34,20 @@ def _serialize_queue_item(item: DahuaSyncQueue) -> dict:
     }
 
 
-async def archive_previous_runs(db: AsyncSession, current_run_id: str) -> int:
+async def archive_previous_runs(
+    db: AsyncSession, current_run_id: str, flow_type: str | None = None
+) -> int:
     """Archive queue items from previous runs to JSON files, then delete from DB.
 
     Each distinct run_id gets its own JSON file under ARCHIVE_DIR.
+    When flow_type is provided, only archive rows matching that flow_type.
     Returns total number of rows archived.
     """
     # Find all distinct run_ids that are NOT the current run
-    result = await db.execute(
-        select(DahuaSyncQueue.run_id).where(DahuaSyncQueue.run_id != current_run_id).distinct()
-    )
+    q = select(DahuaSyncQueue.run_id).where(DahuaSyncQueue.run_id != current_run_id)
+    if flow_type is not None:
+        q = q.where(DahuaSyncQueue.flow_type == flow_type)
+    result = await db.execute(q.distinct())
     old_run_ids = list(result.scalars().all())
 
     if not old_run_ids:

@@ -15,10 +15,11 @@ async def list_all(db: AsyncSession) -> list[DahuaDevice]:
 
 
 async def list_by_gate_type(db: AsyncSession, gate_type: str) -> list[int]:
-    """Return IDs of enabled devices whose gate_type matches 'all' or the given type."""
+    """Return IDs of enabled devices with integration enabled whose gate_type matches."""
     result = await db.execute(
         select(DahuaDevice.id).where(
             DahuaDevice.is_enabled.is_(True),
+            DahuaDevice.enable_integration.is_(True),
             DahuaDevice.gate_type.in_(["all", gate_type]),
         )
     )

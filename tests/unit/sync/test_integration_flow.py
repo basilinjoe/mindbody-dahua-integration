@@ -18,7 +18,7 @@ class _DummyLogger:
         pass
 
 
-async def _fake_archive_previous_sync_queue(run_id):
+async def _fake_archive_previous_sync_queue(run_id, flow_type=None):
     return 0
 
 
@@ -186,7 +186,7 @@ async def test_sync_integration_flow_full_run(monkeypatch: pytest.MonkeyPatch) -
     async def fake_fetch_dahua_users_for_device(device_id):
         return []
 
-    async def fake_write_sync_queue_batch(run_id, items):
+    async def fake_write_sync_queue_batch(run_id, items, flow_type="full"):
         written_items.extend(items)
         return len(items)
 
@@ -318,7 +318,7 @@ async def test_sync_integration_flow_ungendered_members(monkeypatch: pytest.Monk
     async def fake_fetch_dahua_users_for_device(device_id):
         return []
 
-    async def fake_write_sync_queue_batch(run_id, items):
+    async def fake_write_sync_queue_batch(run_id, items, flow_type="full"):
         written_items.extend(items)
         return len(items)
 
@@ -399,7 +399,7 @@ async def test_sync_integration_flow_device_fetch_error(monkeypatch: pytest.Monk
     async def fake_fetch_dahua_users_for_device(device_id):
         raise ConnectionError("device unreachable")
 
-    async def fake_write_sync_queue_batch(run_id, items):
+    async def fake_write_sync_queue_batch(run_id, items, flow_type="full"):
         return len(items)
 
     async def fake_run_dahua_push(run_id, logger):

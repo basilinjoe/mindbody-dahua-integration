@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from prefect import flow, get_run_logger
 from prefect.artifacts import create_table_artifact
@@ -15,12 +15,14 @@ from app.sync.flows.dahua_push import run_dahua_push
 from app.sync.tasks import (
     _format_dahua_date,
     _make_dahua_user_id,
+    advance_watermark,
     archive_previous_sync_queue,
     fetch_all_memberships,
     fetch_dahua_users_for_device,
     fetch_members,
-    load_active_members_from_db,
+    load_active_members_by_ids,
     load_device_ids_by_gate_type,
+    load_last_fetched_at,
     load_membership_windows,
     upsert_mindbody_memberships_batch,
     upsert_mindbody_users_batch,
@@ -29,91 +31,108 @@ from app.sync.tasks import (
 
 logger = logging.getLogger(__name__)
 
+# Safety margin subtracted from the watermark to handle clock skew
+_WATERMARK_MARGIN = timedelta(minutes=2)
 
-@flow(name="sync-integration", log_prints=True)
-async def sync_integration_flow(sync_type: str = "scheduled") -> None:
+
+@flow(name="sync-incremental", log_prints=True)
+async def sync_incremental_flow(sync_type: str = "scheduled") -> None:
     """
-    Main integration flow:
-    1. Fetch all MindBody clients + memberships in parallel → upsert to local DB
-    2. Query local DB for active members with active memberships, classified by gender
-    3. Fetch live user records from each Dahua device and compare against active members
-       (UserID on Dahua device == mindbody_id)
-    4. Compute enroll / deactivate / reactivate / update operations
-    5. Write operations to dahua_sync_queue and execute against devices
+    Incremental sync flow — runs frequently (every 5 min by default).
+    1. Fetch only MindBody clients modified since the last run
+    2. Upsert changed members + their memberships to local DB
+    3. For active changed members: enroll / reactivate / update on Dahua devices
+    4. Does NOT handle deactivation — the daily full sync covers that
     """
     flow_logger = get_run_logger()
     run_id = str(flow_run.id)
     run_started_at = datetime.now(UTC)
     flow_logger.info(
-        "Integration sync started (run_id=%s, sync_type=%s, ts=%s)",
+        "Incremental sync started (run_id=%s, sync_type=%s, ts=%s)",
         run_id,
         sync_type,
         run_started_at.isoformat(),
     )
 
-    # Ensure DB schema is up to date (idempotent, no-op after first call)
     await ensure_timestamps_tz()
 
-    # ── Step 0: Archive previous queue runs ────────────────────────────────
+    # ── Step 0: Archive previous incremental queue runs ───────────────────────
     try:
-        archived = await archive_previous_sync_queue(run_id, flow_type="full")
+        archived = await archive_previous_sync_queue(run_id, flow_type="incremental")
         if archived:
-            flow_logger.info("Archived %d queue items from previous runs", archived)
+            flow_logger.info("Archived %d incremental queue items from previous runs", archived)
     except Exception:
-        flow_logger.warning("Failed to archive previous queue runs", exc_info=True)
+        flow_logger.warning("Failed to archive previous incremental queue runs", exc_info=True)
 
-    # ── Step 1: Fetch from MindBody ────────────────────────────────────────────
-    all_members = await fetch_members()
-    flow_logger.info("Fetched %d members from MindBody", len(all_members))
+    # ── Step 1: Load watermark ────────────────────────────────────────────────
+    last_fetched_at = await load_last_fetched_at()
+    if last_fetched_at is None:
+        flow_logger.warning(
+            "No previous fetch recorded — incremental sync requires at least one "
+            "full sync to have run. Skipping."
+        )
+        return
 
-    id_counts = Counter(str(m["Id"]) for m in all_members if m.get("Id"))
+    modified_since = last_fetched_at - _WATERMARK_MARGIN
+    flow_logger.info("Fetching members modified since %s", modified_since.isoformat())
+
+    # ── Step 2: Fetch changed members from MindBody ───────────────────────────
+    changed_members = await fetch_members(modified_since=modified_since)
+    flow_logger.info("Fetched %d changed members from MindBody", len(changed_members))
+
+    if not changed_members:
+        flow_logger.info("No changes since last run — nothing to do")
+        return
+
+    # Deduplicate (prefer active over inactive for duplicate IDs)
+    id_counts = Counter(str(m["Id"]) for m in changed_members if m.get("Id"))
     duplicate_ids = {mid: count for mid, count in id_counts.items() if count > 1}
     if duplicate_ids:
         flow_logger.warning("Duplicate mindbody_id values in API response: %s", duplicate_ids)
         deduped: dict[str, dict] = {}
-        for m in all_members:
+        for m in changed_members:
             mid = str(m.get("Id", ""))
             if not mid:
                 continue
             existing = deduped.get(mid)
             if existing is None or (m.get("Active") and not existing.get("Active")):
                 deduped[mid] = m
-        all_members = list(deduped.values())
-        flow_logger.info("After dedup: %d members", len(all_members))
+        changed_members = list(deduped.values())
+        flow_logger.info("After dedup: %d members", len(changed_members))
 
-    active_members_from_api = [m for m in all_members if m.get("Active")]
-    flow_logger.info("%d active members after dedup", len(active_members_from_api))
-
-    if not all_members:
-        flow_logger.info("No members fetched from MindBody")
-        return
-
-    # Upsert ALL members (including inactive) so the DB reflects current active status.
-    # Only fetch memberships for active members to avoid unnecessary API calls.
-    active_client_ids = [str(m["Id"]) for m in active_members_from_api if m.get("Id")]
+    # ── Step 3: Upsert members + fetch memberships in parallel ────────────────
+    active_from_api = [m for m in changed_members if m.get("Active")]
+    active_client_ids = [str(m["Id"]) for m in active_from_api if m.get("Id")]
     flow_logger.info(
-        "Starting parallel upsert (%d total members) + membership fetch (%d active client IDs)",
-        len(all_members),
+        "Upserting %d changed members; fetching memberships for %d active",
+        len(changed_members),
         len(active_client_ids),
     )
+
     upsert_count, memberships_by_client = await asyncio.gather(
-        upsert_mindbody_users_batch(all_members),
+        upsert_mindbody_users_batch(changed_members, fetched_at=modified_since),
         fetch_all_memberships(active_client_ids),
     )
     flow_logger.info(
-        "Upserted %d client rows to local DB; fetched memberships for %d clients (%d total membership records)",
+        "Upserted %d rows; fetched memberships for %d clients",
         upsert_count,
         len(memberships_by_client),
-        sum(len(v) for v in memberships_by_client.values()),
     )
-    membership_upsert_count = await upsert_mindbody_memberships_batch(memberships_by_client)
-    flow_logger.info("Upserted %d membership rows to local DB", membership_upsert_count)
+    if memberships_by_client:
+        membership_upsert_count = await upsert_mindbody_memberships_batch(memberships_by_client)
+        flow_logger.info("Upserted %d membership rows", membership_upsert_count)
 
-    # ── Step 2: Load active candidates from DB ─────────────────────────────────
-    # Only members marked active in MindBody AND with an active membership qualify.
-    active_members_orm = await load_active_members_from_db()
-    flow_logger.info("Active members with valid membership: %d", len(active_members_orm))
-    # Convert ORM objects to dicts matching the format expected by _plan_device_operations
+    # ── Step 4: Load active changed members from DB ───────────────────────────
+    all_changed_ids = [str(m["Id"]) for m in changed_members if m.get("Id")]
+    active_members_orm = await load_active_members_by_ids(all_changed_ids)
+    flow_logger.info(
+        "Active members with valid membership among changed set: %d", len(active_members_orm)
+    )
+
+    if not active_members_orm:
+        flow_logger.info("No active members among changed records — nothing to push")
+        return
+
     active_members = [
         {
             "Id": m.mindbody_id,
@@ -125,10 +144,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         for m in active_members_orm
     ]
 
-    if not active_members:
-        flow_logger.info("No active members — nothing to push")
-        return
-
+    # ── Step 5: Classify by gender ────────────────────────────────────────────
     active_male_ids: set[str] = set()
     active_female_ids: set[str] = set()
     ungendered_ids: set[str] = set()
@@ -142,7 +158,6 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
             active_female_ids.add(mid)
         else:
             ungendered_ids.add(mid)
-            # Route to both male and female gates so they aren't excluded
             active_male_ids.add(mid)
             active_female_ids.add(mid)
 
@@ -150,9 +165,8 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
 
     if ungendered_ids:
         flow_logger.warning(
-            "%d active member(s) have no gender set — routing to all gates: %s",
+            "%d active member(s) have no gender set — routing to all gates",
             len(ungendered_ids),
-            ungendered_ids if len(ungendered_ids) <= 10 else f"{len(ungendered_ids)} members",
         )
     flow_logger.info(
         "Classified: %d male, %d female, %d ungendered (routed to all)",
@@ -161,7 +175,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         len(ungendered_ids),
     )
 
-    # ── Step 3: Load devices + membership windows in parallel ──────────────────
+    # ── Step 6: Load devices + membership windows in parallel ─────────────────
     all_active_ids = list(member_map.keys())
     (male_device_ids, female_device_ids), membership_windows = await asyncio.gather(
         asyncio.gather(
@@ -176,31 +190,12 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         len(female_device_ids),
     )
 
-    flow_logger.info(
-        "Male gate device IDs: %s, Female gate device IDs: %s",
-        male_device_ids,
-        female_device_ids,
-    )
-
-    members_with_windows = sum(
-        1 for w in membership_windows.values() if w["valid_start"] or w["valid_end"]
-    )
-    members_without_windows = len(membership_windows) - members_with_windows
-    if members_without_windows:
-        flow_logger.warning(
-            "%d active member(s) have no membership window dates (start/end both null)",
-            members_without_windows,
-        )
-
     all_device_ids = list(dict.fromkeys(male_device_ids + female_device_ids))
     if not all_device_ids:
-        flow_logger.warning(
-            "No enabled devices with integration enabled found — nothing to push. "
-            "Enable integration for a device via the admin UI (Devices → enable_integration)."
-        )
+        flow_logger.warning("No enabled devices with integration enabled — nothing to push")
         return
 
-    # ── Step 4: Fetch live users from all Dahua devices in parallel ────────────
+    # ── Step 7: Fetch live users from Dahua devices ───────────────────────────
     dahua_users_results = await asyncio.gather(
         *[fetch_dahua_users_for_device(did) for did in all_device_ids],
         return_exceptions=True,
@@ -212,9 +207,8 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
             dahua_users_by_device[device_id] = []
         else:
             dahua_users_by_device[device_id] = result
-            flow_logger.info("Device %d: found %d existing users on device", device_id, len(result))
 
-    # ── Step 5: Plan operations for each device ────────────────────────────────
+    # ── Step 8: Plan incremental operations (no deactivation) ─────────────────
     all_items: list[dict] = []
 
     for gate_label, device_ids, active_ids in [
@@ -222,7 +216,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         ("female", female_device_ids, active_female_ids),
     ]:
         for device_id in device_ids:
-            items = _plan_device_operations(
+            items = _plan_incremental_operations(
                 device_id=device_id,
                 active_member_ids=active_ids,
                 member_map=member_map,
@@ -231,76 +225,65 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
             )
             c = Counter(i["action"] for i in items)
             flow_logger.info(
-                "Device %d (%s): enroll=%d deactivate=%d reactivate=%d update=%d",
+                "Device %d (%s): enroll=%d reactivate=%d update=%d",
                 device_id,
                 gate_label,
                 c["enroll"],
-                c["deactivate"],
                 c["reactivate"],
                 c["update"],
             )
-            # Log individual member IDs per action for debugging
-            for action in ("enroll", "deactivate", "reactivate", "update"):
-                action_ids = [i["mindbody_client_id"] for i in items if i["action"] == action]
-                if action_ids:
-                    flow_logger.info(
-                        "  Device %d → %s (%d): %s",
-                        device_id,
-                        action,
-                        len(action_ids),
-                        action_ids
-                        if len(action_ids) <= 20
-                        else f"{action_ids[:20]}... (+{len(action_ids) - 20} more)",
-                    )
             all_items.extend(items)
 
     total = Counter(i["action"] for i in all_items)
     flow_logger.info(
-        "Total planned: %d operations — enroll=%d deactivate=%d reactivate=%d update=%d",
+        "Total planned: %d operations — enroll=%d reactivate=%d update=%d",
         len(all_items),
         total["enroll"],
-        total["deactivate"],
         total["reactivate"],
         total["update"],
     )
 
     if not all_items:
-        flow_logger.info("All devices already in sync — nothing to do")
+        flow_logger.info("All changed members already in sync — nothing to do")
         return
 
-    # ── Step 6: Write queue + execute ─────────────────────────────────────────
+    # ── Step 9: Write queue + execute push ────────────────────────────────────
     flow_logger.info("Writing %d items to sync queue (run_id=%s)", len(all_items), run_id)
-    await write_sync_queue_batch(run_id, all_items, flow_type="full")
+    await write_sync_queue_batch(run_id, all_items, flow_type="incremental")
 
     push_start = datetime.now(UTC)
     flow_logger.info("Starting Dahua push phase")
     push_stats = await run_dahua_push(run_id, flow_logger)
 
     await create_table_artifact(
-        key="sync-results",
+        key="incremental-sync-results",
         table=[
             {"metric": "enrolled", "count": push_stats.get("enrolled", 0)},
-            {"metric": "deactivated", "count": push_stats.get("deactivated", 0)},
             {"metric": "reactivated", "count": push_stats.get("reactivated", 0)},
-            {"metric": "window_updated", "count": push_stats.get("window_updated", 0)},
+            {"metric": "updated", "count": push_stats.get("updated", 0)},
             {"metric": "failed", "count": push_stats.get("failed", 0)},
         ],
         description=(
-            f"## Integration Sync — {run_started_at.strftime('%Y-%m-%d %H:%M')} UTC\n"
+            f"## Incremental Sync — {run_started_at.strftime('%Y-%m-%d %H:%M')} UTC\n"
             f"run_id: `{run_id}`"
         ),
     )
+    # Advance the watermark only after a successful push so that a mid-run crash
+    # does not skip members on the next incremental run.
+    watermark_count = await advance_watermark(all_changed_ids, run_started_at)
+    flow_logger.info("Watermark advanced for %d members to %s", watermark_count, run_started_at)
+
     elapsed = (datetime.now(UTC) - run_started_at).total_seconds()
     push_elapsed = (datetime.now(UTC) - push_start).total_seconds()
     flow_logger.info(
-        "Sync complete — push took %.1fs, total %.1fs — %s",
+        "Incremental sync complete — push took %.1fs, total %.1fs — %s",
         push_elapsed,
         elapsed,
         push_stats,
     )
 
 
-def _plan_device_operations(
+def _plan_incremental_operations(
     device_id: int,
     active_member_ids: set[str],
     member_map: dict[str, dict],
@@ -308,18 +291,13 @@ def _plan_device_operations(
     membership_windows: dict[str, dict],
 ) -> list[dict]:
     """
-    Compare active MindBody members against live Dahua device records.
-    UserID on the Dahua device is expected to equal the MindBody client ID.
-
-    Returns a list of queue item dicts (action ∈ enroll|deactivate|reactivate|update).
-    Does NOT execute any device operations.
+    Plan enroll / reactivate / update operations for changed active members.
+    Does NOT generate deactivation actions — the daily full sync handles that.
     """
-    # Build a map of UserID → Dahua user record for O(1) lookups
     dahua_map: dict[str, dict] = {u["UserID"]: u for u in dahua_users if u.get("UserID")}
 
     items: list[dict] = []
 
-    # ── Active members: enroll / reactivate / update ───────────────────
     for cid in active_member_ids:
         window = membership_windows.get(cid, {})
         start_date = window.get("valid_start")
@@ -327,7 +305,6 @@ def _plan_device_operations(
         new_valid_start = _format_dahua_date(start_date)
         new_valid_end = _format_dahua_date(expiration_date)
 
-        # Normalize to match the UserID stored on the device during enrollment
         device_uid = _make_dahua_user_id(cid)
 
         if device_uid not in dahua_map:
@@ -426,24 +403,5 @@ def _plan_device_operations(
                             "enrollment_id": None,
                         }
                     )
-
-    # ── Users on device not in active set → deactivate ────────────────────────
-    # Build normalized set of active IDs for consistent comparison with device UserIDs
-    active_device_uids = {_make_dahua_user_id(cid) for cid in active_member_ids}
-    for user_id, dahua_user in dahua_map.items():
-        if user_id in active_device_uids:
-            continue  # handled above
-        card_status = str(dahua_user.get("CardStatus", "0"))
-        if card_status != "4":  # only act if not already frozen
-            items.append(
-                {
-                    "device_id": device_id,
-                    "mindbody_client_id": user_id,
-                    "action": "deactivate",
-                    "member_snapshot": None,
-                    "dahua_user_id": user_id,
-                    "enrollment_id": None,
-                }
-            )
 
     return items
