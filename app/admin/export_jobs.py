@@ -99,10 +99,12 @@ def _build_dahua_csv(users: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _run_export_job(job_id: int, sync_engine) -> None:
+async def _run_export_job(job_id: int, settings) -> None:
     """Background task: run the CSV export. Uses its own async sessions."""
     from sqlalchemy import select
 
+    from app.clients.dahua import DahuaClient
+    from app.clients.mindbody import MindBodyClient
     from app.models.database import AsyncSessionLocal
     from app.models.device import DahuaDevice
 
@@ -115,7 +117,11 @@ async def _run_export_job(job_id: int, sync_engine) -> None:
         buffers: dict[str, str] = {}
 
         # MindBody
-        clients = await sync_engine.mindbody.get_all_clients()
+        mb_client = MindBodyClient(settings=settings)
+        try:
+            clients = await mb_client.get_all_clients()
+        finally:
+            await mb_client.close()
         buffers["mindbody_users.csv"] = _build_mindbody_csv(clients)
 
         # All enabled Dahua devices
@@ -123,13 +129,21 @@ async def _run_export_job(job_id: int, sync_engine) -> None:
             devices_result = await db.execute(
                 select(DahuaDevice).where(DahuaDevice.is_enabled.is_(True))
             )
-            db_devices = {d.id: d for d in devices_result.scalars().all()}
+            devices = list(devices_result.scalars().all())
 
-        for device_id, dahua_client in list(sync_engine._dahua_clients.items()):
-            device = db_devices.get(device_id)
-            device_name = device.name if device else str(device_id)
-            users = await dahua_client.get_all_users()
-            safe_name = re.sub(r"[^\w\-]", "_", device_name)
+        for device in devices:
+            dahua_client = DahuaClient(
+                host=device.host,
+                port=device.port,
+                username=device.username,
+                password=device.password,
+                door_ids=device.door_ids,
+            )
+            try:
+                users = await dahua_client.get_all_users()
+            finally:
+                await dahua_client.close()
+            safe_name = re.sub(r"[^\w\-]", "_", device.name)
             buffers[f"{safe_name}_users.csv"] = _build_dahua_csv(users)
 
         # Write ZIP
@@ -206,7 +220,7 @@ async def export_all(
     background_tasks.add_task(
         _run_export_job,
         job.id,
-        request.app.state.sync_engine,
+        request.app.state.settings,
     )
     return RedirectResponse(url="/admin/exports", status_code=303)
 
@@ -228,8 +242,13 @@ async def export_jobs_partial(
 @router.get("/mindbody.csv")
 async def export_mindbody_csv(request: Request):
     """Download all MindBody clients as CSV."""
-    engine = request.app.state.sync_engine
-    clients = await engine.mindbody.get_all_clients()
+    from app.clients.mindbody import MindBodyClient
+
+    mb_client = MindBodyClient(settings=request.app.state.settings)
+    try:
+        clients = await mb_client.get_all_clients()
+    finally:
+        await mb_client.close()
     content = _build_mindbody_csv(clients)
     return Response(
         content=content,
@@ -247,6 +266,7 @@ async def export_dahua_csv(
     """Download all users from a single Dahua device as CSV."""
     from sqlalchemy import select as _select
 
+    from app.clients.dahua import DahuaClient
     from app.models.device import DahuaDevice as _DahuaDevice
 
     result = await db.execute(
@@ -255,16 +275,20 @@ async def export_dahua_csv(
     device = result.scalar_one_or_none()
     if not device:
         return Response(content="Device not found or not enabled", status_code=404)
-    device_name = device.name
 
-    engine = request.app.state.sync_engine
-    dahua_client = engine._dahua_clients.get(device_id)
-    if not dahua_client:
-        return Response(content="Device client not available", status_code=404)
-
-    users = await dahua_client.get_all_users()
+    dahua_client = DahuaClient(
+        host=device.host,
+        port=device.port,
+        username=device.username,
+        password=device.password,
+        door_ids=device.door_ids,
+    )
+    try:
+        users = await dahua_client.get_all_users()
+    finally:
+        await dahua_client.close()
     content = _build_dahua_csv(users)
-    safe_name = re.sub(r"[^\w\-]", "_", device_name)
+    safe_name = re.sub(r"[^\w\-]", "_", device.name)
     return Response(
         content=content,
         media_type="text/csv",
