@@ -75,8 +75,8 @@ async def test_ensure_timestamps_tz_runs_alter_for_asyncpg():
         await db_mod.ensure_timestamps_tz()
 
         assert db_mod._timestamps_migrated is True
-        # Should have called execute for each timestamp column
-        assert mock_conn.execute.call_count == len(db_mod._TIMESTAMP_COLUMNS)
+        # Should have called execute for each timestamp column + flow_type migration
+        assert mock_conn.execute.call_count == len(db_mod._TIMESTAMP_COLUMNS) + 1
     finally:
         db_mod._timestamps_migrated = original_flag
         db_mod.async_engine = original_engine

@@ -54,6 +54,18 @@ async def ensure_timestamps_tz() -> None:
                 )
             except Exception:
                 pass  # Column may not exist yet or already be TIMESTAMPTZ
+
+        # Add flow_type column to dahua_sync_queue (idempotent)
+        try:
+            await conn.execute(
+                text(
+                    "ALTER TABLE dahua_sync_queue "
+                    "ADD COLUMN IF NOT EXISTS flow_type VARCHAR(16) NOT NULL DEFAULT 'full'"
+                )
+            )
+        except Exception:
+            pass  # Column already exists or table not created yet
+
     _timestamps_migrated = True
     _logger.info("Ensured all timestamp columns are timezone-aware")
 
