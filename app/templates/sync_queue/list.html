@@ -9,7 +9,7 @@
       <h1 class="text-sm font-semibold text-gray-900">Dahua Sync Queue</h1>
       <span class="text-xs text-gray-400">{{ total }} item{{ 's' if total != 1 else '' }}</span>
     </div>
-    <a href="/admin/sync-queue/export.csv?run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}"
+    <a href="/admin/sync-queue/export.csv?run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}&flow_type={{ flow_type_filter }}"
        hx-boost="false"
        class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -58,7 +58,15 @@
           {% endfor %}
         </select>
 
-        {% if run_id_filter or action_filter or status_filter or device_id_filter %}
+        <!-- Flow type select -->
+        <select name="flow_type" onchange="this.form.submit()"
+          class="px-2.5 py-0.5 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-gray-900 outline-none">
+          <option value="">All flows</option>
+          <option value="full" {% if flow_type_filter == 'full' %}selected{% endif %}>Full</option>
+          <option value="incremental" {% if flow_type_filter == 'incremental' %}selected{% endif %}>Incremental</option>
+        </select>
+
+        {% if run_id_filter or action_filter or status_filter or device_id_filter or flow_type_filter %}
         <a href="/admin/sync-queue"
           class="px-2.5 py-0.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-100 transition">Clear</a>
         {% endif %}
@@ -79,6 +87,7 @@
           <tr>
             <th class="text-left px-3 py-2 font-medium text-gray-500">ID</th>
             <th class="text-left px-3 py-2 font-medium text-gray-500">Run ID</th>
+            <th class="text-left px-3 py-2 font-medium text-gray-500">Flow</th>
             <th class="text-left px-3 py-2 font-medium text-gray-500">Client</th>
             <th class="text-left px-3 py-2 font-medium text-gray-500">Device</th>
             <th class="text-left px-3 py-2 font-medium text-gray-500">Action</th>
@@ -95,7 +104,7 @@
           {% endfor %}
           {% if not items %}
           <tr>
-            <td colspan="10" class="px-3 py-10 text-center text-gray-400">No queue items found</td>
+            <td colspan="11" class="px-3 py-10 text-center text-gray-400">No queue items found</td>
           </tr>
           {% endif %}
         </tbody>
@@ -110,11 +119,11 @@
       </p>
       <div class="flex gap-1">
         {% if offset > 0 %}
-        <a href="/admin/sync-queue?offset={{ offset - page_size }}&run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}"
+        <a href="/admin/sync-queue?offset={{ offset - page_size }}&run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}&flow_type={{ flow_type_filter }}"
           class="px-2.5 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50">Previous</a>
         {% endif %}
         {% if offset + page_size < total %}
-        <a href="/admin/sync-queue?offset={{ offset + page_size }}&run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}"
+        <a href="/admin/sync-queue?offset={{ offset + page_size }}&run_id={{ run_id_filter }}&action={{ action_filter }}&status={{ status_filter }}&device_id={{ device_id_filter }}&flow_type={{ flow_type_filter }}"
           class="px-2.5 py-1 border border-gray-300 rounded text-xs hover:bg-gray-50">Next</a>
         {% endif %}
       </div>

@@ -2,6 +2,12 @@
   <td class="px-3 py-1.5 text-gray-500 font-mono">{{ item.id }}</td>
   <td class="px-3 py-1.5 font-mono text-gray-600" title="{{ item.run_id }}">{{ item.run_id[:12] }}…</td>
   <td class="px-3 py-1.5">
+    <span class="px-1.5 py-0.5 rounded text-xs font-medium
+      {% if item.flow_type == 'incremental' %}bg-amber-50 text-amber-700{% else %}bg-gray-100 text-gray-600{% endif %}">
+      {{ item.flow_type or 'full' }}
+    </span>
+  </td>
+  <td class="px-3 py-1.5">
     <span class="text-gray-800 font-medium">{{ item.client_name }}</span>
     <span class="text-gray-400 ml-1">{{ item.mindbody_client_id }}</span>
   </td>

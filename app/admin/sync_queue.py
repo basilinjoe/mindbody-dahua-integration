@@ -29,7 +29,7 @@ router = APIRouter(prefix="/sync-queue")
 # ---------------------------------------------------------------------------
 
 
-def _build_filtered_query(run_id: str, action: str, status: str, device_id: int):
+def _build_filtered_query(run_id: str, action: str, status: str, device_id: int, flow_type: str):
     """Return a select() with joins + filters applied (no ordering/pagination)."""
     q = (
         select(DahuaSyncQueue, MindBodyClient, DahuaDevice)
@@ -47,6 +47,8 @@ def _build_filtered_query(run_id: str, action: str, status: str, device_id: int)
         q = q.where(DahuaSyncQueue.status == status)
     if device_id:
         q = q.where(DahuaSyncQueue.device_id == device_id)
+    if flow_type:
+        q = q.where(DahuaSyncQueue.flow_type == flow_type)
     return q
 
 
@@ -79,30 +81,18 @@ async def sync_queue_list(
     action: str = "",
     status: str = "",
     device_id: int = 0,
+    flow_type: str = "",
     offset: int = 0,
     db: AsyncSession = Depends(get_async_db),
 ):
     page_size = 50
-    q = _build_filtered_query(run_id, action, status, device_id)
+    q = _build_filtered_query(run_id, action, status, device_id, flow_type)
 
-    total_result = await db.execute(
-        select(DahuaSyncQueue.id)
-        .outerjoin(
-            MindBodyClient,
-            MindBodyClient.mindbody_id == DahuaSyncQueue.mindbody_client_id,
-        )
-        .outerjoin(DahuaDevice, DahuaDevice.id == DahuaSyncQueue.device_id)
-        .where(
-            *(
-                [DahuaSyncQueue.run_id == run_id]
-                if run_id
-                else []
-                + ([DahuaSyncQueue.action == action] if action else [])
-                + ([DahuaSyncQueue.status == status] if status else [])
-                + ([DahuaSyncQueue.device_id == device_id] if device_id else [])
-            )
-        )
+    # Count total matching rows using the same filter builder
+    count_q = _build_filtered_query(run_id, action, status, device_id, flow_type).with_only_columns(
+        DahuaSyncQueue.id
     )
+    total_result = await db.execute(count_q)
     total = len(total_result.all())
 
     rows_result = await db.execute(
@@ -129,6 +119,7 @@ async def sync_queue_list(
             "action_filter": action,
             "status_filter": status,
             "device_id_filter": device_id,
+            "flow_type_filter": flow_type,
             "devices": devices,
         },
     )
@@ -158,9 +149,10 @@ async def sync_queue_export_csv(
     action: str = "",
     status: str = "",
     device_id: int = 0,
+    flow_type: str = "",
     db: AsyncSession = Depends(get_async_db),
 ):
-    q = _build_filtered_query(run_id, action, status, device_id)
+    q = _build_filtered_query(run_id, action, status, device_id, flow_type)
     rows_result = await db.execute(q.order_by(DahuaSyncQueue.created_at.desc()))
     items = [_row_to_dict(*row) for row in rows_result.all()]
 
