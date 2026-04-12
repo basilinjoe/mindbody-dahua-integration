@@ -118,6 +118,12 @@ async def load_active_by_ids(db: AsyncSession, client_ids: list[str]) -> list[Mi
     return list(result.scalars().all())
 
 
+async def load_all_known_ids(db: AsyncSession) -> set[str]:
+    """Return all mindbody_id values from the clients table (active and inactive)."""
+    result = await db.execute(select(MindBodyClient.mindbody_id))
+    return {row[0] for row in result.all()}
+
+
 async def get_last_fetched_at(db: AsyncSession) -> datetime | None:
     """Return the most recent last_fetched_at timestamp across all member rows."""
     result = await db.execute(select(func.max(MindBodyClient.last_fetched_at)))

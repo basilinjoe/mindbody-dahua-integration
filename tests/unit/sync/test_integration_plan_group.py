@@ -69,6 +69,7 @@ def test_plan_device_operations_creates_all_action_types() -> None:
         member_map=member_map,
         dahua_users=dahua_users,
         membership_windows=membership_windows,
+        known_mindbody_ids={"101", "102", "103", "104"},
     )
 
     by_action: dict[str, list[dict]] = {}
@@ -139,6 +140,7 @@ def test_plan_recognises_existing_user_with_normalized_id() -> None:
         member_map=member_map,
         dahua_users=dahua_users,
         membership_windows=membership_windows,
+        known_mindbody_ids={"00123"},
     )
     # Should NOT try to enroll — the member already exists on the device
     assert all(i["action"] != "enroll" for i in items), (
@@ -158,6 +160,7 @@ def test_plan_device_operations_returns_empty_when_no_active_members() -> None:
         member_map={},
         dahua_users=[],
         membership_windows={},
+        known_mindbody_ids=set(),
     )
     assert items == []
 
@@ -194,6 +197,7 @@ def test_plan_device_operations_no_op_when_already_in_sync() -> None:
         member_map=member_map,
         dahua_users=dahua_users,
         membership_windows=membership_windows,
+        known_mindbody_ids={"101"},
     )
     assert items == [], f"Expected no operations but got: {items}"
 
@@ -206,6 +210,69 @@ def test_plan_device_operations_skips_already_frozen_users() -> None:
         member_map={},
         dahua_users=[{"UserID": "999", "CardStatus": "4", "ValidDateEnd": ""}],
         membership_windows={},
+        known_mindbody_ids={"999"},
     )
     # Should NOT generate a deactivate — already frozen
     assert all(i["action"] != "deactivate" for i in items)
+
+
+def test_plan_skips_manually_managed_device_users() -> None:
+    """Users on device that are NOT in known_mindbody_ids should never be deactivated."""
+    active_member_ids = {"101"}
+    member_map = {
+        "101": {
+            "Id": "101",
+            "FirstName": "A",
+            "LastName": "B",
+            "Gender": "male",
+            "Email": None,
+        },
+    }
+    dahua_users = [
+        # Active MindBody member
+        {
+            "UserID": "101",
+            "CardName": "A B",
+            "CardStatus": "0",
+            "ValidDateStart": "20260101 000000",
+            "ValidDateEnd": "20261231 235959",
+        },
+        # Manually-added user (not in MindBody at all)
+        {"UserID": "GUARD01", "CardName": "Security Guard", "CardStatus": "0"},
+        # Lapsed MindBody member (in known set but not active)
+        {"UserID": "103", "CardName": "Old Member", "CardStatus": "0"},
+    ]
+    membership_windows = {
+        "101": {"valid_start": "2026-01-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"},
+    }
+
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=active_member_ids,
+        member_map=member_map,
+        dahua_users=dahua_users,
+        membership_windows=membership_windows,
+        known_mindbody_ids={"101", "103"},  # GUARD01 is NOT in this set
+    )
+
+    deactivated_ids = [i["mindbody_client_id"] for i in items if i["action"] == "deactivate"]
+    assert "103" in deactivated_ids, "Lapsed MindBody member should be deactivated"
+    assert "GUARD01" not in deactivated_ids, "Manually-managed user must NOT be deactivated"
+
+
+def test_plan_skips_all_when_only_manual_users_on_device() -> None:
+    """Device has only manually-managed users → zero deactivate actions."""
+    items = integration_mod._plan_device_operations(
+        device_id=7,
+        active_member_ids=set(),
+        member_map={},
+        dahua_users=[
+            {"UserID": "GUARD01", "CardStatus": "0"},
+            {"UserID": "STAFF02", "CardStatus": "0"},
+        ],
+        membership_windows={},
+        known_mindbody_ids=set(),  # neither user is a MindBody member
+    )
+    assert all(i["action"] != "deactivate" for i in items), (
+        f"No deactivations expected for manual-only users, got: {items}"
+    )

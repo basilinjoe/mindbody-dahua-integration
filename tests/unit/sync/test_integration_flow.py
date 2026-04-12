@@ -116,6 +116,9 @@ async def test_sync_integration_flow_no_devices(monkeypatch: pytest.MonkeyPatch)
     async def fake_load_membership_windows(ids):
         return {}
 
+    async def fake_load_all_known_mindbody_ids():
+        return {"100"}
+
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
@@ -137,6 +140,9 @@ async def test_sync_integration_flow_no_devices(monkeypatch: pytest.MonkeyPatch)
         integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
     )
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(
+        integration_mod, "load_all_known_mindbody_ids", fake_load_all_known_mindbody_ids
+    )
 
     await integration_mod.sync_integration_flow.fn(sync_type="test")
 
@@ -216,7 +222,14 @@ async def test_sync_integration_flow_full_run(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(
         integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
     )
+
+    async def fake_load_all_known_mindbody_ids():
+        return {"100", "200"}
+
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(
+        integration_mod, "load_all_known_mindbody_ids", fake_load_all_known_mindbody_ids
+    )
     monkeypatch.setattr(
         integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device
     )
@@ -348,7 +361,14 @@ async def test_sync_integration_flow_ungendered_members(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
     )
+
+    async def fake_load_all_known_mindbody_ids():
+        return {"100"}
+
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(
+        integration_mod, "load_all_known_mindbody_ids", fake_load_all_known_mindbody_ids
+    )
     monkeypatch.setattr(
         integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device
     )
@@ -428,7 +448,14 @@ async def test_sync_integration_flow_device_fetch_error(monkeypatch: pytest.Monk
     monkeypatch.setattr(
         integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
     )
+
+    async def fake_load_all_known_mindbody_ids():
+        return {"100"}
+
     monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(
+        integration_mod, "load_all_known_mindbody_ids", fake_load_all_known_mindbody_ids
+    )
     monkeypatch.setattr(
         integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device
     )

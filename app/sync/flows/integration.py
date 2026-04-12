@@ -20,6 +20,7 @@ from app.sync.tasks import (
     fetch_dahua_users_for_device,
     fetch_members,
     load_active_members_from_db,
+    load_all_known_mindbody_ids,
     load_device_ids_by_gate_type,
     load_membership_windows,
     upsert_mindbody_memberships_batch,
@@ -161,14 +162,19 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
         len(ungendered_ids),
     )
 
-    # ── Step 3: Load devices + membership windows in parallel ──────────────────
+    # ── Step 3: Load devices + membership windows + known IDs in parallel ───────
     all_active_ids = list(member_map.keys())
-    (male_device_ids, female_device_ids), membership_windows = await asyncio.gather(
+    (
+        (male_device_ids, female_device_ids),
+        membership_windows,
+        all_known_mindbody_ids,
+    ) = await asyncio.gather(
         asyncio.gather(
             load_device_ids_by_gate_type("male"),
             load_device_ids_by_gate_type("female"),
         ),
         load_membership_windows(all_active_ids),
+        load_all_known_mindbody_ids(),
     )
     flow_logger.info(
         "Devices — male gates: %d, female gates: %d",
@@ -228,6 +234,7 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
                 member_map=member_map,
                 dahua_users=dahua_users_by_device.get(device_id, []),
                 membership_windows=membership_windows,
+                known_mindbody_ids=all_known_mindbody_ids,
             )
             c = Counter(i["action"] for i in items)
             flow_logger.info(
@@ -306,6 +313,7 @@ def _plan_device_operations(
     member_map: dict[str, dict],
     dahua_users: list[dict],
     membership_windows: dict[str, dict],
+    known_mindbody_ids: set[str] | None = None,
 ) -> list[dict]:
     """
     Compare active MindBody members against live Dahua device records.
@@ -430,9 +438,19 @@ def _plan_device_operations(
     # ── Users on device not in active set → deactivate ────────────────────────
     # Build normalized set of active IDs for consistent comparison with device UserIDs
     active_device_uids = {_make_dahua_user_id(cid) for cid in active_member_ids}
+    known_device_uids = (
+        {_make_dahua_user_id(mid) for mid in known_mindbody_ids}
+        if known_mindbody_ids is not None
+        else None
+    )
+    skipped_manual: list[str] = []
     for user_id, dahua_user in dahua_map.items():
         if user_id in active_device_uids:
             continue  # handled above
+        # Skip users not managed by MindBody (manually added to device)
+        if known_device_uids is not None and user_id not in known_device_uids:
+            skipped_manual.append(user_id)
+            continue
         card_status = str(dahua_user.get("CardStatus", "0"))
         if card_status != "4":  # only act if not already frozen
             items.append(
@@ -445,5 +463,15 @@ def _plan_device_operations(
                     "enrollment_id": None,
                 }
             )
+
+    if skipped_manual:
+        logger.info(
+            "Device %d: skipped %d non-MindBody user(s): %s",
+            device_id,
+            len(skipped_manual),
+            skipped_manual
+            if len(skipped_manual) <= 10
+            else f"{skipped_manual[:10]}... (+{len(skipped_manual) - 10} more)",
+        )
 
     return items

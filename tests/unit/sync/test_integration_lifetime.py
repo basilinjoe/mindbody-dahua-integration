@@ -33,6 +33,7 @@ def test_plan_updates_window_for_lifetime_membership() -> None:
         member_map=member_map,
         dahua_users=dahua_users,
         membership_windows=membership_windows,
+        known_mindbody_ids={"200"},
     )
 
     assert len(items) == 1
@@ -67,6 +68,7 @@ def test_plan_no_op_for_lifetime_no_dates() -> None:
         member_map=member_map,
         dahua_users=dahua_users,
         membership_windows=membership_windows,
+        known_mindbody_ids={"300"},
     )
     assert items == [], f"Expected no operations but got: {items}"
 
@@ -97,6 +99,7 @@ def test_plan_updates_when_only_start_changed() -> None:
         member_map=member_map,
         dahua_users=dahua_users,
         membership_windows=membership_windows,
+        known_mindbody_ids={"400"},
     )
 
     assert len(items) == 1

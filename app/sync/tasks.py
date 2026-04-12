@@ -332,6 +332,13 @@ async def load_active_members_from_db() -> list[MindBodyClientModel]:
         return await members_svc.load_active(db)
 
 
+@task(name="load-all-known-mindbody-ids", tags=["db"])
+async def load_all_known_mindbody_ids() -> set[str]:
+    """Return all mindbody_id values (active and inactive) for filtering manual device users."""
+    async with _get_async_session_factory()() as db:
+        return await members_svc.load_all_known_ids(db)
+
+
 @task(name="load-last-fetched-at", tags=["db"])
 async def load_last_fetched_at() -> datetime | None:
     """Return the most recent last_fetched_at timestamp across all member rows."""
