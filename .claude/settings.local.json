@@ -32,7 +32,20 @@
       "Bash(pytest -q)",
       "Bash(python -m pytest tests/unit/admin/ -v)",
       "Bash(.venv/Scripts/pytest --cov=app --cov-report=term-missing --cov-fail-under=85)",
-      "Bash(python -m pytest --cov=app --cov-report=term-missing)"
+      "Bash(python -m pytest --cov=app --cov-report=term-missing)",
+      "Bash(gh run:*)",
+      "Bash(where gh:*)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" run list --limit 3 --json status,conclusion,name,headSha)",
+      "Bash(\"/c/Program Files \\(x86\\)/GitHub CLI/gh.exe\" run list --limit 3)",
+      "Bash(.venv/Scripts/python -m pytest tests/unit/sync/test_health_flow.py tests/unit/sync/test_dahua_push_disabled.py -v)",
+      "Bash(.venv/Scripts/python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/unit/sync/test_integration_flow.py -v)",
+      "Bash(.venv/Scripts/python.exe -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85)",
+      "Bash(.venv/Scripts/python.exe -m ruff check .)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85 -x)",
+      "Bash(python -c ':*)"
     ]
   },
   "hooks": {
