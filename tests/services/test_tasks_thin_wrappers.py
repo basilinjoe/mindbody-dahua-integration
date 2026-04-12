@@ -197,6 +197,29 @@ async def test_mark_queue_item_delegates_to_queue_service():
 
 
 @pytest.mark.asyncio
+async def test_advance_watermark_delegates_to_members_service():
+    from datetime import UTC, datetime
+
+    import app.sync.tasks as tasks_mod
+    from app.services import members as members_svc
+
+    mock_db = AsyncMock()
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=False)
+    mock_factory = MagicMock(return_value=mock_db)
+
+    ts = datetime(2026, 4, 12, 10, 0, 0, tzinfo=UTC)
+
+    with patch.object(tasks_mod, "_get_async_session_factory", return_value=mock_factory):
+        with patch.object(
+            members_svc, "update_last_fetched_at", new_callable=AsyncMock, return_value=2
+        ) as mock_update:
+            result = await tasks_mod.advance_watermark.fn(["101", "102"], ts)
+            assert result == 2
+            mock_update.assert_called_once_with(mock_db, ["101", "102"], ts)
+
+
+@pytest.mark.asyncio
 async def test_load_all_devices_delegates_to_devices_service():
     import app.sync.tasks as tasks_mod
     from app.services import devices as devices_svc

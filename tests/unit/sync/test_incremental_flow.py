@@ -465,3 +465,138 @@ async def test_incremental_flow_gender_routing_ungendered(
     assert device_ids == {10, 20}
     assert all(item["action"] == "enroll" for item in written_items)
     assert all(item["mindbody_client_id"] == "301" for item in written_items)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("_patch_flow")
+async def test_incremental_flow_dedup_prefers_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Duplicate member IDs should be deduped, preferring active over inactive."""
+    watermark = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
+    written_items: list[dict] = []
+
+    async def fake_load_last_fetched_at():
+        return watermark
+
+    async def fake_fetch_members(modified_since=None):
+        return [
+            {"Id": "401", "Active": False, "FirstName": "Old", "LastName": "X", "Gender": "Male"},
+            {"Id": "401", "Active": True, "FirstName": "New", "LastName": "X", "Gender": "Male"},
+        ]
+
+    async def fake_upsert(members, fetched_at=None):
+        return len(members)
+
+    async def fake_fetch_all_memberships(client_ids):
+        return {"401": [{"Id": "m1", "Name": "Monthly", "Status": "Active"}]}
+
+    async def fake_upsert_memberships(memberships_by_client):
+        return 1
+
+    async def fake_load_active_by_ids(client_ids):
+        return [
+            SimpleNamespace(
+                mindbody_id="401",
+                first_name="New",
+                last_name="X",
+                gender="Male",
+                email=None,
+            )
+        ]
+
+    async def fake_load_device_ids(gate_type):
+        return [10] if gate_type == "male" else []
+
+    async def fake_load_membership_windows(client_ids):
+        return {"401": {"valid_start": "2026-04-01T00:00:00Z", "valid_end": "2026-12-31T23:59:59Z"}}
+
+    async def fake_fetch_dahua_users(device_id):
+        return []
+
+    async def fake_write_queue(run_id, items, flow_type="full"):
+        written_items.extend(items)
+        return len(items)
+
+    async def fake_push(run_id, flow_logger):
+        return {"enrolled": 1, "reactivated": 0, "updated": 0, "failed": 0}
+
+    monkeypatch.setattr(incremental_mod, "load_last_fetched_at", fake_load_last_fetched_at)
+    monkeypatch.setattr(incremental_mod, "fetch_members", fake_fetch_members)
+    monkeypatch.setattr(incremental_mod, "upsert_mindbody_users_batch", fake_upsert)
+    monkeypatch.setattr(incremental_mod, "fetch_all_memberships", fake_fetch_all_memberships)
+    monkeypatch.setattr(
+        incremental_mod, "upsert_mindbody_memberships_batch", fake_upsert_memberships
+    )
+    monkeypatch.setattr(incremental_mod, "load_active_members_by_ids", fake_load_active_by_ids)
+    monkeypatch.setattr(incremental_mod, "load_device_ids_by_gate_type", fake_load_device_ids)
+    monkeypatch.setattr(incremental_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(incremental_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users)
+    monkeypatch.setattr(incremental_mod, "write_sync_queue_batch", fake_write_queue)
+    monkeypatch.setattr(incremental_mod, "run_dahua_push", fake_push)
+
+    await incremental_mod.sync_incremental_flow.fn(sync_type="test")
+
+    # Only one enroll despite duplicate API response
+    assert len(written_items) == 1
+    assert written_items[0]["mindbody_client_id"] == "401"
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("_patch_flow")
+async def test_incremental_flow_no_devices_returns_early(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When no devices are enabled, the flow should return early after classification."""
+    watermark = datetime(2026, 4, 1, 12, 0, 0, tzinfo=UTC)
+
+    async def fake_load_last_fetched_at():
+        return watermark
+
+    async def fake_fetch_members(modified_since=None):
+        return [{"Id": "501", "Active": True, "FirstName": "A", "LastName": "B", "Gender": "Male"}]
+
+    async def fake_upsert(members, fetched_at=None):
+        return len(members)
+
+    async def fake_fetch_all_memberships(client_ids):
+        return {"501": [{"Id": "m1", "Name": "Monthly", "Status": "Active"}]}
+
+    async def fake_upsert_memberships(memberships_by_client):
+        return 1
+
+    async def fake_load_active_by_ids(client_ids):
+        return [
+            SimpleNamespace(
+                mindbody_id="501", first_name="A", last_name="B", gender="Male", email=None
+            )
+        ]
+
+    async def fake_load_device_ids(gate_type):
+        return []  # no devices
+
+    async def fake_load_membership_windows(client_ids):
+        return {"501": {"valid_start": None, "valid_end": None}}
+
+    write_called = False
+
+    async def fake_write_queue(run_id, items, flow_type="full"):
+        nonlocal write_called
+        write_called = True
+        return 0
+
+    monkeypatch.setattr(incremental_mod, "load_last_fetched_at", fake_load_last_fetched_at)
+    monkeypatch.setattr(incremental_mod, "fetch_members", fake_fetch_members)
+    monkeypatch.setattr(incremental_mod, "upsert_mindbody_users_batch", fake_upsert)
+    monkeypatch.setattr(incremental_mod, "fetch_all_memberships", fake_fetch_all_memberships)
+    monkeypatch.setattr(
+        incremental_mod, "upsert_mindbody_memberships_batch", fake_upsert_memberships
+    )
+    monkeypatch.setattr(incremental_mod, "load_active_members_by_ids", fake_load_active_by_ids)
+    monkeypatch.setattr(incremental_mod, "load_device_ids_by_gate_type", fake_load_device_ids)
+    monkeypatch.setattr(incremental_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(incremental_mod, "write_sync_queue_batch", fake_write_queue)
+
+    await incremental_mod.sync_incremental_flow.fn(sync_type="test")
+
+    assert not write_called, "Should not write queue when no devices available"
