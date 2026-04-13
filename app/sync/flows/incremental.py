@@ -104,23 +104,34 @@ async def sync_incremental_flow(sync_type: str = "scheduled") -> None:
     active_from_api = [m for m in changed_members if m.get("Active")]
     active_client_ids = [str(m["Id"]) for m in active_from_api if m.get("Id")]
     flow_logger.info(
-        "Upserting %d changed members; fetching memberships for %d active",
+        "Upserting %d changed members; %d active",
         len(changed_members),
         len(active_client_ids),
     )
 
-    upsert_count, memberships_by_client = await asyncio.gather(
-        upsert_mindbody_users_batch(changed_members, fetched_at=modified_since),
-        fetch_all_memberships(active_client_ids),
-    )
-    flow_logger.info(
-        "Upserted %d rows; fetched memberships for %d clients",
-        upsert_count,
-        len(memberships_by_client),
-    )
-    if memberships_by_client:
-        membership_upsert_count = await upsert_mindbody_memberships_batch(memberships_by_client)
-        flow_logger.info("Upserted %d membership rows", membership_upsert_count)
+    if active_client_ids:
+        upsert_count, memberships_by_client = await asyncio.gather(
+            upsert_mindbody_users_batch(changed_members, fetched_at=modified_since),
+            fetch_all_memberships(active_client_ids),
+        )
+        flow_logger.info(
+            "Upserted %d rows; fetched memberships for %d clients",
+            upsert_count,
+            len(memberships_by_client),
+        )
+        if memberships_by_client:
+            membership_upsert_count = await upsert_mindbody_memberships_batch(
+                memberships_by_client
+            )
+            flow_logger.info("Upserted %d membership rows", membership_upsert_count)
+    else:
+        upsert_count = await upsert_mindbody_users_batch(
+            changed_members, fetched_at=modified_since
+        )
+        flow_logger.info(
+            "Upserted %d rows; skipped membership fetch (no active members in changed set)",
+            upsert_count,
+        )
 
     # ── Step 4: Load active changed members from DB ───────────────────────────
     all_changed_ids = [str(m["Id"]) for m in changed_members if m.get("Id")]

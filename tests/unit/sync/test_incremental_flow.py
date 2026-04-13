@@ -269,6 +269,7 @@ async def test_incremental_flow_no_active_among_changed(
         return [{"Id": "101", "Active": False, "FirstName": "A", "LastName": "B"}]
 
     upsert_called = False
+    membership_fetch_called = False
 
     async def fake_upsert(members, fetched_at=None):
         nonlocal upsert_called
@@ -276,7 +277,8 @@ async def test_incremental_flow_no_active_among_changed(
         return len(members)
 
     async def fake_fetch_all_memberships(client_ids):
-        assert client_ids == []  # no active members
+        nonlocal membership_fetch_called
+        membership_fetch_called = True
         return {}
 
     async def fake_upsert_memberships(memberships_by_client):
@@ -297,6 +299,7 @@ async def test_incremental_flow_no_active_among_changed(
     await incremental_mod.sync_incremental_flow.fn(sync_type="test")
 
     assert upsert_called, "Should still upsert changed members even if none are active"
+    assert not membership_fetch_called, "Should skip membership API fetch when no active members"
 
 
 @pytest.mark.asyncio

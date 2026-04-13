@@ -7,9 +7,11 @@ Start with:
 On startup:
  1. Registers MindBodyCredentials block type with Prefect server
  2. Creates per-device concurrency limits (max 2 concurrent calls per device)
- 3. Starts prefect serve() with 2 deployments:
-    - sync-integration/full         (every N minutes, full reconciliation)
-    - device-health/scheduled       (every M minutes, health check)
+ 3. Starts prefect serve() with 4 deployments:
+    - sync-integration/full         (daily, full reconciliation + deactivation)
+    - sync-incremental/incremental  (every 5 min, enroll/reactivate/update only)
+    - device-health/scheduled       (every 5 min, health check)
+    - sync-dahua-push/retry         (manual only, re-run push by run_id)
 """
 
 from __future__ import annotations
@@ -95,7 +97,7 @@ async def _create_block_from_env() -> None:
     logger.info("MindBodyCredentials block 'production' created/updated from env vars")
 
 
-async def _setup() -> tuple[int, int]:
+async def _setup() -> tuple[int, int, int]:
     """Initialise DB, register block types, set up concurrency limits."""
     logging.basicConfig(
         level=logging.INFO,
