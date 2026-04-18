@@ -47,8 +47,10 @@ async def test_sync_integration_flow_no_members(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.asyncio
 async def test_sync_integration_flow_no_active_members(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Flow returns early when all members are inactive."""
+    """When all members are inactive, flow still runs plan phase so enrolled
+    device users get deactivated (not an early return)."""
     members = [{"Id": "100", "Active": False, "FirstName": "A", "LastName": "B"}]
+    written_items: list = []
 
     async def fake_fetch_members(**kwargs):
         return members
@@ -64,6 +66,30 @@ async def test_sync_integration_flow_no_active_members(monkeypatch: pytest.Monke
 
     async def fake_load_active_members_from_db():
         return []
+
+    async def fake_load_device_ids_by_gate_type(gt):
+        return [1] if gt == "male" else [2]
+
+    async def fake_load_membership_windows(ids):
+        return {}
+
+    async def fake_load_all_known_mindbody_ids():
+        return {"100", "999"}
+
+    async def fake_fetch_dahua_users_for_device(device_id):
+        # Device has a previously-enrolled user who is no longer active —
+        # must be deactivated even though active_members is empty.
+        return [{"UserID": "999", "CardStatus": 0, "CardName": "Old User"}]
+
+    async def fake_write_sync_queue_batch(run_id, items, flow_type="full"):
+        written_items.extend(items)
+        return len(items)
+
+    async def fake_run_dahua_push(run_id, logger):
+        return {"enrolled": 0, "deactivated": 1, "reactivated": 0, "window_updated": 0, "failed": 0}
+
+    async def fake_create_table_artifact(**kwargs):
+        pass
 
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
@@ -82,8 +108,26 @@ async def test_sync_integration_flow_no_active_members(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
     )
+    monkeypatch.setattr(
+        integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
+    )
+    monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(
+        integration_mod, "load_all_known_mindbody_ids", fake_load_all_known_mindbody_ids
+    )
+    monkeypatch.setattr(
+        integration_mod, "fetch_dahua_users_for_device", fake_fetch_dahua_users_for_device
+    )
+    monkeypatch.setattr(integration_mod, "write_sync_queue_batch", fake_write_sync_queue_batch)
+    monkeypatch.setattr(integration_mod, "run_dahua_push", fake_run_dahua_push)
+    monkeypatch.setattr(integration_mod, "create_table_artifact", fake_create_table_artifact)
 
     await integration_mod.sync_integration_flow.fn(sync_type="test")
+
+    # A deactivate item must have been queued for the stale device user.
+    assert any(i["action"] == "deactivate" for i in written_items), (
+        "Expected deactivate action for user still on device but no longer active"
+    )
 
 
 @pytest.mark.asyncio
@@ -270,6 +314,15 @@ async def test_sync_integration_flow_dedup_members(monkeypatch: pytest.MonkeyPat
     async def fake_load_active_members_from_db():
         return []
 
+    async def fake_load_device_ids_by_gate_type(gt):
+        return []
+
+    async def fake_load_membership_windows(ids):
+        return {}
+
+    async def fake_load_all_known_mindbody_ids():
+        return set()
+
     monkeypatch.setattr(integration_mod, "get_run_logger", _DummyLogger)
     monkeypatch.setattr(integration_mod, "flow_run", type("FR", (), {"id": "test-run-id"})())
     monkeypatch.setattr(integration_mod, "ensure_timestamps_tz", _fake_ensure_timestamps_tz)
@@ -286,6 +339,13 @@ async def test_sync_integration_flow_dedup_members(monkeypatch: pytest.MonkeyPat
     )
     monkeypatch.setattr(
         integration_mod, "load_active_members_from_db", fake_load_active_members_from_db
+    )
+    monkeypatch.setattr(
+        integration_mod, "load_device_ids_by_gate_type", fake_load_device_ids_by_gate_type
+    )
+    monkeypatch.setattr(integration_mod, "load_membership_windows", fake_load_membership_windows)
+    monkeypatch.setattr(
+        integration_mod, "load_all_known_mindbody_ids", fake_load_all_known_mindbody_ids
     )
 
     await integration_mod.sync_integration_flow.fn(sync_type="test")

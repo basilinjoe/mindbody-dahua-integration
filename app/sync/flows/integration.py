@@ -127,8 +127,9 @@ async def sync_integration_flow(sync_type: str = "scheduled") -> None:
     ]
 
     if not active_members:
-        flow_logger.info("No active members — nothing to push")
-        return
+        flow_logger.info(
+            "No active members — continuing to plan deactivations for any still-enrolled users"
+        )
 
     active_male_ids: set[str] = set()
     active_female_ids: set[str] = set()

@@ -58,11 +58,10 @@ async def archive_previous_runs(
     total_archived = 0
 
     for run_id in old_run_ids:
-        rows = await db.execute(
-            select(DahuaSyncQueue)
-            .where(DahuaSyncQueue.run_id == run_id)
-            .order_by(DahuaSyncQueue.id)
-        )
+        items_q = select(DahuaSyncQueue).where(DahuaSyncQueue.run_id == run_id)
+        if flow_type is not None:
+            items_q = items_q.where(DahuaSyncQueue.flow_type == flow_type)
+        rows = await db.execute(items_q.order_by(DahuaSyncQueue.id))
         items = list(rows.scalars().all())
 
         if not items:
@@ -75,14 +74,18 @@ async def archive_previous_runs(
             "items": [_serialize_queue_item(item) for item in items],
         }
 
-        file_path = ARCHIVE_DIR / f"sync_queue_{run_id}.json"
+        file_suffix = f"_{flow_type}" if flow_type else ""
+        file_path = ARCHIVE_DIR / f"sync_queue_{run_id}{file_suffix}.json"
         try:
             file_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except OSError:
             logger.warning("Failed to write archive file %s — skipping deletion", file_path)
             continue
 
-        await db.execute(delete(DahuaSyncQueue).where(DahuaSyncQueue.run_id == run_id))
+        delete_q = delete(DahuaSyncQueue).where(DahuaSyncQueue.run_id == run_id)
+        if flow_type is not None:
+            delete_q = delete_q.where(DahuaSyncQueue.flow_type == flow_type)
+        await db.execute(delete_q)
         total_archived += len(items)
 
     await db.commit()

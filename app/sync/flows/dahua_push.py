@@ -69,7 +69,20 @@ async def run_dahua_push(run_id: str, flow_logger) -> dict:
         "update": "updated",
     }
 
+    # Cap concurrent operations per device to avoid flooding Dahua CGI endpoints.
+    # This guards standalone runs; Prefect concurrency slots provide the same limit
+    # when a Prefect server is available.
+    per_device_limit = 2
+    device_semaphores: dict[int, asyncio.Semaphore] = {
+        device_id: asyncio.Semaphore(per_device_limit)
+        for device_id in {item.device_id for item in items}
+    }
+
     async def _execute(item):
+        async with device_semaphores[item.device_id]:
+            return await _execute_inner(item)
+
+    async def _execute_inner(item):
         logger.info(
             "Executing queue item %d: action=%s device=%d client=%s",
             item.id,
